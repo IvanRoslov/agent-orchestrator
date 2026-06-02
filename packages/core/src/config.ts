@@ -263,6 +263,8 @@ const ProjectConfigSchema = z.object({
   scm: SCMConfigSchema.optional(),
   symlinks: z.array(z.string()).optional(),
   postCreate: z.array(z.string()).optional(),
+  /** Project IDs a feature orchestrator may spawn workers into. */
+  linkedProjects: z.array(z.string()).optional(),
   agentConfig: AgentSpecificConfigSchema.default({}),
   orchestrator: RoleAgentConfigSchema,
   worker: RoleAgentConfigSchema,

@@ -309,4 +309,32 @@ projects:
     });
 
   });
+
+  describe("linkedProjects", () => {
+    it("parses and preserves linkedProjects on a project", () => {
+      const configPath = join(testDir, "agent-orchestrator.yaml");
+      writeFileSync(
+        configPath,
+        [
+          "projects:",
+          "  hub:",
+          "    path: .",
+          "    linkedProjects:",
+          "      - api-repo",
+          "      - web-repo",
+        ].join("\n"),
+      );
+
+      const config = loadConfig();
+      expect(config.projects.hub.linkedProjects).toEqual(["api-repo", "web-repo"]);
+    });
+
+    it("leaves linkedProjects undefined when absent", () => {
+      const configPath = join(testDir, "agent-orchestrator.yaml");
+      writeFileSync(configPath, ["projects:", "  hub:", "    path: ."].join("\n"));
+
+      const config = loadConfig();
+      expect(config.projects.hub.linkedProjects).toBeUndefined();
+    });
+  });
 });
