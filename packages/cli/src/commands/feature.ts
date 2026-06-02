@@ -1,12 +1,30 @@
 import chalk from "chalk";
 import type { Command } from "commander";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { loadConfig, type OrchestratorConfig } from "@aoagents/ao-core";
+import { getGlobalConfigPath, loadConfig, type OrchestratorConfig } from "@aoagents/ao-core";
 import { DEFAULT_PORT } from "../lib/constants.js";
 import { getSessionManager } from "../lib/create-session-manager.js";
 import { findProjectForDirectory } from "../lib/project-resolution.js";
 import { getRunning } from "../lib/running-state.js";
 import { projectSessionUrl } from "../lib/routes.js";
+
+/**
+ * Load a config that includes ALL registered projects. Feature commands are
+ * inherently cross-project: the hub orchestrator spawns workers into linked
+ * projects, and `ao feature status` must list sessions across them. A config
+ * resolved from the local project dir only contains that one project, so prefer
+ * the global config (same pattern as `ao stop`). Falls back to the local config
+ * when no global config exists.
+ */
+function loadAllProjectsConfig(): OrchestratorConfig {
+  const localConfig = loadConfig();
+  const globalPath = getGlobalConfigPath();
+  if (existsSync(globalPath)) {
+    return loadConfig(globalPath);
+  }
+  return localConfig;
+}
 
 /** Derive a stable, filesystem/branch-safe feature slug from a description. */
 export function slugifyFeature(description: string): string {
@@ -83,7 +101,7 @@ async function featureStart(
   description: string,
   opts: { hub?: string; agent?: string },
 ): Promise<void> {
-  const config = loadConfig();
+  const config = loadAllProjectsConfig();
 
   let hubId: string;
   try {
@@ -150,7 +168,7 @@ async function featureStart(
 }
 
 async function featureStatus(slug: string): Promise<void> {
-  const config = loadConfig();
+  const config = loadAllProjectsConfig();
   const sm = await getSessionManager(config);
   const all = await sm.list();
 
