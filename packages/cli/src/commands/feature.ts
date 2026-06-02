@@ -2,12 +2,22 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { getGlobalConfigPath, loadConfig, type OrchestratorConfig } from "@aoagents/ao-core";
+import {
+  buildFeatureKickoff,
+  getGlobalConfigPath,
+  loadConfig,
+  slugifyFeature,
+  type OrchestratorConfig,
+} from "@aoagents/ao-core";
 import { DEFAULT_PORT } from "../lib/constants.js";
 import { getSessionManager } from "../lib/create-session-manager.js";
 import { findProjectForDirectory } from "../lib/project-resolution.js";
 import { getRunning } from "../lib/running-state.js";
 import { projectSessionUrl } from "../lib/routes.js";
+
+// Re-export the shared kickoff helpers (canonical impl lives in ao-core) so
+// existing CLI tests importing them from this module keep working.
+export { buildFeatureKickoff, slugifyFeature };
 
 /**
  * Load a config that includes ALL registered projects. Feature commands are
@@ -26,42 +36,6 @@ function loadAllProjectsConfig(): OrchestratorConfig {
   return localConfig;
 }
 
-/** Derive a stable, filesystem/branch-safe feature slug from a description. */
-export function slugifyFeature(description: string): string {
-  const slug = description
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .split("-")
-    .filter(Boolean)
-    .slice(0, 5)
-    .join("-");
-  return slug || "feature";
-}
-
-/** Build the kickoff message sent to the hub orchestrator to begin a feature. */
-export function buildFeatureKickoff(opts: {
-  slug: string;
-  description: string;
-  linkedProjects: string[];
-}): string {
-  const { slug, description, linkedProjects } = opts;
-  return [
-    `Start a new cross-project feature. Read and follow skills/feature-orchestrator/SKILL.md as your operating procedure for the entire feature.`,
-    ``,
-    `Feature slug: ${slug}`,
-    `Feature description: ${description}`,
-    `Linked projects (spawn workers only into these): ${linkedProjects.join(", ")}`,
-    ``,
-    `Key rules from the skill:`,
-    `- Spawn each worker with: ao spawn --project <project> --branch feature/${slug}/<project> --prompt "<short brief + slice>"`,
-    `- All worker questions come back to you via "ao send <your-session-id>"; you answer from feature context or escalate to the human in this chat.`,
-    `- Drive workers in lockstep through gates (brainstorm -> plan -> implement -> verify -> debug). Do not advance a gate until the human approves it here.`,
-    `- The feature design doc lives in this hub repo under docs/superpowers/specs/.`,
-    ``,
-    `Begin with the research + brainstorm stage now.`,
-  ].join("\n");
-}
 
 /**
  * Read the hub project's linkedProjects. The field is validated by the Zod

@@ -186,6 +186,9 @@ export type { LifecycleManagerDeps } from "./lifecycle-manager.js";
 export { buildPrompt, BASE_AGENT_PROMPT, BASE_AGENT_PROMPT_NO_REPO } from "./prompt-builder.js";
 export type { PromptBuildConfig } from "./prompt-builder.js";
 
+// Cross-project feature orchestrator kickoff helpers (shared by CLI + web)
+export { slugifyFeature, buildFeatureKickoff } from "./feature-kickoff.js";
+
 // Orchestrator prompt — generates orchestrator context for `ao start`
 export { generateOrchestratorPrompt } from "./orchestrator-prompt.js";
 export type { OrchestratorPromptConfig } from "./orchestrator-prompt.js";

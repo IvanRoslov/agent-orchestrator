@@ -25,6 +25,7 @@ import { ConnectionBar } from "./ConnectionBar";
 import { UpdateBanner } from "./UpdateBanner";
 import { CopyDebugBundleButton } from "./CopyDebugBundleButton";
 import { DashboardNotificationButton } from "./DashboardNotificationButton";
+import { StartFeatureButton } from "./StartFeatureButton";
 import { SidebarContext, useSidebarContext } from "./workspace/SidebarContext";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { isOrchestratorSession } from "@aoagents/ao-core/types";
@@ -645,6 +646,9 @@ function DashboardInner({
                 </svg>
                 {isSpawningCurrentProject ? "Spawning..." : "Spawn Orchestrator"}
               </button>
+            ) : null}
+            {!allProjectsView && activeProject ? (
+              <StartFeatureButton projectId={activeProject.id} projectName={activeProject.name} />
             ) : null}
           </div>
         </header>
