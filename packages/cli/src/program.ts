@@ -20,6 +20,7 @@ import { registerMigrateStorage } from "./commands/migrate-storage.js";
 import { registerCompletion } from "./commands/completion.js";
 import { registerEvents } from "./commands/events.js";
 import { registerConfig } from "./commands/config.js";
+import { registerFeature } from "./commands/feature.js";
 import { getConfigInstruction } from "./lib/config-instruction.js";
 import { getCliVersion } from "./options/version.js";
 
@@ -55,6 +56,7 @@ export function createProgram(): Command {
   registerCompletion(program);
   registerEvents(program);
   registerConfig(program);
+  registerFeature(program);
 
   program
     .command("config-help")

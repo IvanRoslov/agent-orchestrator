@@ -19,4 +19,12 @@ describe("createProgram", () => {
   it("registers the review command", () => {
     expect(createProgram().commands.some((command) => command.name() === "review")).toBe(true);
   });
+
+  it("registers the feature command with start and status subcommands", () => {
+    const feature = createProgram().commands.find((command) => command.name() === "feature");
+    expect(feature).toBeDefined();
+    const subs = feature?.commands.map((c) => c.name()) ?? [];
+    expect(subs).toContain("start");
+    expect(subs).toContain("status");
+  });
 });

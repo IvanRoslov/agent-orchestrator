@@ -95,6 +95,28 @@ function resolveProjectAndIssue(
   return { projectId: fallback };
 }
 
+/**
+ * Apply an explicit `--project` override. When set, the project must be a
+ * registered project and the optional `issue` arg is treated as a bare issue id
+ * for that project (no prefix routing). When unset, defer to
+ * `resolveProjectAndIssue` (auto-detect / prefix routing).
+ */
+export function applyProjectOverride(
+  config: OrchestratorConfig,
+  projectOverride: string | undefined,
+  issue: string | undefined,
+): { projectId: string; issueId?: string } {
+  if (projectOverride) {
+    if (!config.projects[projectOverride]) {
+      throw new Error(
+        `Unknown project: ${projectOverride}\nAvailable: ${Object.keys(config.projects).join(", ")}`,
+      );
+    }
+    return { projectId: projectOverride, issueId: issue };
+  }
+  return resolveProjectAndIssue(config, issue);
+}
+
 interface SpawnClaimOptions {
   claimPr?: string;
   assignOnGithub?: boolean;
@@ -204,6 +226,7 @@ async function spawnSession(
   agent?: string,
   claimOptions?: SpawnClaimOptions,
   prompt?: string,
+  branch?: string,
 ): Promise<void> {
   const spinner = ora("Creating session").start();
 
@@ -236,6 +259,7 @@ async function spawnSession(
       issueId,
       agent,
       prompt: sanitizedPrompt,
+      branch,
     });
 
     let claimedPrUrl: string | null = null;
@@ -308,6 +332,8 @@ export function registerSpawn(program: Command): void {
       "--prompt <text>",
       "Initial prompt/instructions for the agent (use instead of an issue)",
     )
+    .option("--project <id>", "Target a specific registered project by id (overrides auto-detect)")
+    .option("--branch <name>", "Branch name for the new session's workspace")
     .action(
       async (
         issue: string | undefined,
@@ -317,6 +343,8 @@ export function registerSpawn(program: Command): void {
           claimPr?: string;
           assignOnGithub?: boolean;
           prompt?: string;
+          project?: string;
+          branch?: string;
         },
         command: Command,
       ) => {
@@ -335,7 +363,7 @@ export function registerSpawn(program: Command): void {
         let projectId: string;
         let issueId: string | undefined;
         try {
-          ({ projectId, issueId } = resolveProjectAndIssue(config, issue));
+          ({ projectId, issueId } = applyProjectOverride(config, opts.project, issue));
         } catch (err) {
           console.error(chalk.red(err instanceof Error ? err.message : String(err)));
           process.exit(1);
@@ -381,6 +409,7 @@ export function registerSpawn(program: Command): void {
             opts.agent,
             claimOptions,
             opts.prompt,
+            opts.branch,
           );
         } catch (err) {
           console.error(chalk.red(`✗ ${err instanceof Error ? err.message : String(err)}`));
