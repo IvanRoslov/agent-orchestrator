@@ -1,11 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  buildFeatureKickoff,
-  generateOrchestratorPrompt,
-  recordActivityEvent,
-} from "@aoagents/ao-core";
+import { buildFeatureKickoff, recordActivityEvent, slugifyFeature } from "@aoagents/ao-core";
 import { getServices } from "@/lib/services";
-import { validateIdentifier, validateConfiguredProject } from "@/lib/validation";
+import { validateIdentifier, validateConfiguredProject, validateString } from "@/lib/validation";
 
 /**
  * Read a hub project's linkedProjects. The field is validated by the Zod schema
@@ -17,10 +13,14 @@ function readLinkedProjects(project: unknown): string[] {
   return Array.isArray(value) ? value : [];
 }
 
+const MAX_NAME_LENGTH = 200;
+
 /**
- * POST /api/feature/start — ensure the hub project's orchestrator exists and
- * send it the cross-project feature kickoff (no description; the human gives it
- * in chat). Returns the orchestrator so the UI can open its terminal.
+ * POST /api/feature/start — spawn a DEDICATED feature-orchestrator session in
+ * the hub project (not the shared project orchestrator) on the
+ * `feature-orchestrator/<slug>` branch, tasked with the cross-project feature
+ * kickoff. Several features can run in parallel; the UI lists them by branch.
+ * Returns the new session so the UI can open its terminal.
  */
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -32,6 +32,12 @@ export async function POST(request: NextRequest) {
   if (projectErr) {
     return NextResponse.json({ error: projectErr }, { status: 400 });
   }
+
+  const nameErr = validateString(body.name, "name", MAX_NAME_LENGTH);
+  if (nameErr) {
+    return NextResponse.json({ error: nameErr }, { status: 400 });
+  }
+  const name = String(body.name).trim();
 
   try {
     const { config, sessionManager } = await getServices();
@@ -64,27 +70,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const systemPrompt = generateOrchestratorPrompt({ config, projectId, project });
-    const orchestrator = await sessionManager.ensureOrchestrator({ projectId, systemPrompt });
+    const slug = slugifyFeature(name);
+    // Newlines stripped: sm.spawn passes the prompt to the agent launch; the
+    // kickoff stays a single line (still a valid instruction for the agent).
+    const kickoff = buildFeatureKickoff({ linkedProjects, description: name, slug }).replace(
+      /[\r\n]+/g,
+      " ",
+    );
 
-    const kickoff = buildFeatureKickoff({ linkedProjects });
-    await sessionManager.send(orchestrator.id, kickoff);
+    const session = await sessionManager.spawn({
+      projectId,
+      prompt: kickoff,
+      branch: `feature-orchestrator/${slug}`,
+    });
 
     recordActivityEvent({
       projectId,
-      sessionId: orchestrator.id,
+      sessionId: session.id,
       source: "api",
       kind: "api.feature_start_requested",
-      summary: `feature start requested for ${projectId}`,
-      data: { linkedProjects },
+      summary: `feature "${slug}" started for ${projectId}`,
+      data: { slug, name, linkedProjects },
     });
 
     return NextResponse.json(
       {
-        orchestrator: {
-          id: orchestrator.id,
+        feature: {
+          sessionId: session.id,
           projectId,
           projectName: project.name,
+          slug,
+          name,
         },
       },
       { status: 201 },

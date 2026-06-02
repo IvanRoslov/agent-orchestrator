@@ -26,6 +26,7 @@ import { UpdateBanner } from "./UpdateBanner";
 import { CopyDebugBundleButton } from "./CopyDebugBundleButton";
 import { DashboardNotificationButton } from "./DashboardNotificationButton";
 import { StartFeatureButton } from "./StartFeatureButton";
+import { isFeatureCoordinator } from "@/lib/feature-sessions";
 import { SidebarContext, useSidebarContext } from "./workspace/SidebarContext";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { isOrchestratorSession } from "@aoagents/ao-core/types";
@@ -175,8 +176,10 @@ function DashboardInner({
   });
 
   const projectSessions = useMemo(() => {
-    if (!projectId) return sessions;
-    return sessions.filter((s) => s.projectId === projectId);
+    const scoped = projectId ? sessions.filter((s) => s.projectId === projectId) : sessions;
+    // Feature-orchestrator sessions live in the sidebar "Features" group, not
+    // the Kanban board.
+    return scoped.filter((s) => !isFeatureCoordinator(s));
   }, [sessions, projectId]);
 
   const allSessionPrefixes = useMemo(

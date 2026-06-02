@@ -11,6 +11,7 @@ import { getSessionTitle, humanizeBranch } from "@/lib/format";
 import { usePopoverClamp } from "@/hooks/usePopoverClamp";
 import { useResizable } from "@/hooks/useResizable";
 import { projectDashboardPath, projectSessionPath } from "@/lib/routes";
+import { featureSlugFromBranch, isFeatureCoordinator } from "@/lib/feature-sessions";
 import { ThemeToggle } from "./ThemeToggle";
 import { AppMark } from "./AppMark";
 import { AddProjectModal } from "./AddProjectModal";
@@ -500,6 +501,8 @@ function ProjectSidebarInner({
       // Only include sessions whose projectId matches a configured project
       if (!validProjectIds.has(s.projectId)) continue;
       if (isOrchestratorSession(s, prefixByProject.get(s.projectId), allPrefixes)) continue;
+      // Feature-orchestrator sessions render in their own "Features" group.
+      if (isFeatureCoordinator(s)) continue;
       // Keep terminal sessions visible when they still need human attention.
       // Otherwise ACTION-column cards disappear from the sidebar just because
       // their runtime has ended.
@@ -513,6 +516,26 @@ function ProjectSidebarInner({
     }
     return map;
   }, [sessionsKey, prefixByProject, allPrefixes, visibleProjects, showKilled, showDone]);
+
+  // Feature-orchestrator sessions, grouped per project, for the "Features"
+  // section. These are dedicated coordinator sessions (branch
+  // `feature-orchestrator/<slug>`), kept separate from workers and the board.
+  const featureSessionsByProject = useMemo(() => {
+    const map = new Map<string, DashboardSession[]>();
+    const validProjectIds = new Set(visibleProjects.map((p) => p.id));
+    for (const s of sessionsRef.current ?? []) {
+      if (!validProjectIds.has(s.projectId)) continue;
+      if (!isFeatureCoordinator(s)) continue;
+      const level = getAttentionLevel(s);
+      if (level === "done") {
+        if (s.status === "killed" ? !showKilled && !showDone : !showDone) continue;
+      }
+      const list = map.get(s.projectId) ?? [];
+      list.push(s);
+      map.set(s.projectId, list);
+    }
+    return map;
+  }, [sessionsKey, visibleProjects, showKilled, showDone]);
 
 
   // Clear an optimistic rename once the prop session.displayName catches up.
@@ -813,6 +836,7 @@ function ProjectSidebarInner({
           const projectHref = projectDashboardPath(project.id);
           // sessionsByProject already applies the showDone filter consistently.
           const visibleSessions = workerSessions;
+          const featureSessions = featureSessionsByProject.get(project.id) ?? [];
           const orchestratorLink = orchestratorByProject.get(project.id) ?? null;
           // Look up the full session object so navigate() can cache it in
           // sessionStorage — prevents the "Session unavailable" flash on
@@ -1034,6 +1058,55 @@ function ProjectSidebarInner({
 
               {isDegraded ? (
                 <div className="project-sidebar__degraded-note">Config needs repair</div>
+              ) : null}
+
+              {/* Features (dedicated feature-orchestrator sessions) */}
+              {!isDegraded && isExpanded && featureSessions.length > 0 ? (
+                <div className="project-sidebar__sessions">
+                  <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                    Features
+                  </div>
+                  {featureSessions.map((session) => {
+                    const slug = featureSlugFromBranch(session.branch) ?? session.id;
+                    const level = getAttentionLevel(session);
+                    const isSessionActive = activeSessionId === session.id;
+                    const href = projectSessionPath(session.projectId, session.id);
+                    return (
+                      <div
+                        key={session.id}
+                        className={cn(
+                          "project-sidebar__sess-row",
+                          isSessionActive && "project-sidebar__sess-row--active",
+                        )}
+                      >
+                        <a
+                          href={href}
+                          onClick={(e) => {
+                            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+                            e.preventDefault();
+                            navigate(href, session);
+                          }}
+                          className="project-sidebar__sess-link flex flex-1 min-w-0 items-center gap-[7px]"
+                          aria-current={isSessionActive ? "page" : undefined}
+                          aria-label={`Open feature ${slug}`}
+                          title={`Feature: ${slug}`}
+                        >
+                          <SessionDot level={level} />
+                          <div className="flex-1 min-w-0">
+                            <span
+                              className={cn(
+                                "project-sidebar__sess-label",
+                                isSessionActive && "project-sidebar__sess-label--active",
+                              )}
+                            >
+                              {slug}
+                            </span>
+                          </div>
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : null}
 
               {/* Sessions */}
