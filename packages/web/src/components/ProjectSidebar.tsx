@@ -11,7 +11,7 @@ import { getSessionTitle, humanizeBranch } from "@/lib/format";
 import { usePopoverClamp } from "@/hooks/usePopoverClamp";
 import { useResizable } from "@/hooks/useResizable";
 import { projectDashboardPath, projectSessionPath } from "@/lib/routes";
-import { featureSlugFromBranch, isFeatureCoordinator } from "@/lib/feature-sessions";
+import { featureLabel, isFeatureCoordinator } from "@/lib/feature-sessions";
 import { ThemeToggle } from "./ThemeToggle";
 import { AppMark } from "./AppMark";
 import { AddProjectModal } from "./AddProjectModal";
@@ -518,8 +518,8 @@ function ProjectSidebarInner({
   }, [sessionsKey, prefixByProject, allPrefixes, visibleProjects, showKilled, showDone]);
 
   // Feature-orchestrator sessions, grouped per project, for the "Features"
-  // section. These are dedicated coordinator sessions (branch
-  // `feature-orchestrator/<slug>`), kept separate from workers and the board.
+  // section. These are dedicated coordinator sessions (tagged with
+  // metadata.feature), kept separate from workers and the board.
   const featureSessionsByProject = useMemo(() => {
     const map = new Map<string, DashboardSession[]>();
     const validProjectIds = new Set(visibleProjects.map((p) => p.id));
@@ -1067,7 +1067,7 @@ function ProjectSidebarInner({
                     Features
                   </div>
                   {featureSessions.map((session) => {
-                    const slug = featureSlugFromBranch(session.branch) ?? session.id;
+                    const slug = featureLabel(session);
                     const level = getAttentionLevel(session);
                     const isSessionActive = activeSessionId === session.id;
                     const href = projectSessionPath(session.projectId, session.id);

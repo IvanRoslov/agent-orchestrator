@@ -26,7 +26,7 @@ describe("numbered (feature) orchestrators", () => {
     const sm = createSessionManager({ config: ctx.config, registry: ctx.mockRegistry });
     const session = await sm.spawnOrchestrator(
       { projectId: "my-app", systemPrompt: "coordinate the feature" },
-      { numbered: true, displayName: "SSO login" },
+      { numbered: true, displayName: "SSO login", feature: "sso-login" },
     );
 
     expect(session.id).toMatch(/^app-orchestrator-\d+$/);
@@ -34,6 +34,7 @@ describe("numbered (feature) orchestrators", () => {
     expect(isOrchestratorSession(session, "app")).toBe(true);
     expect(session.lifecycle.session.kind).toBe("orchestrator");
     expect(session.metadata.displayName).toBe("SSO login");
+    expect(session.metadata.feature).toBe("sso-login");
   });
 
   it("assigns sequential numbers and coexists with the fixed orchestrator", async () => {

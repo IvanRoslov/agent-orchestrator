@@ -190,12 +190,16 @@ function DashboardInner({
   const sidebarOrchestrators = useMemo(
     () =>
       sessions
-        .filter((s) =>
-          isOrchestratorSession(
-            s,
-            projects.find((p) => p.id === s.projectId)?.sessionPrefix ?? s.projectId,
-            allSessionPrefixes,
-          ),
+        .filter(
+          (s) =>
+            isOrchestratorSession(
+              s,
+              projects.find((p) => p.id === s.projectId)?.sessionPrefix ?? s.projectId,
+              allSessionPrefixes,
+            ) &&
+            // The main orchestrator link is the fixed orchestrator only;
+            // numbered feature orchestrators render in the "Features" group.
+            !isFeatureCoordinator(s),
         )
         .map((s) => ({ id: s.id, projectId: s.projectId })),
     [sessions, projects, allSessionPrefixes],
@@ -307,6 +311,9 @@ function DashboardInner({
   const sessionsByProject = useMemo(() => {
     const groupedSessions = new Map<string, DashboardSession[]>();
     for (const session of sessions) {
+      // Feature orchestrators ride the sessions stream but are not project
+      // work — keep them out of per-project overview counts (and the board).
+      if (isFeatureCoordinator(session)) continue;
       const projectSessions = groupedSessions.get(session.projectId);
       if (projectSessions) {
         projectSessions.push(session);

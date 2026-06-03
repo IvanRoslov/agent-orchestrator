@@ -34,12 +34,16 @@ function listProjectOrchestratorSessions(
   );
 
   const projectOrchestrators = sessions
-    .filter((session) =>
-      isOrchestratorSession(
-        session,
-        projects[session.projectId]?.sessionPrefix ?? session.projectId,
-        allSessionPrefixes,
-      ),
+    .filter(
+      (session) =>
+        isOrchestratorSession(
+          session,
+          projects[session.projectId]?.sessionPrefix ?? session.projectId,
+          allSessionPrefixes,
+        ) &&
+        // The main "Orchestrator" link excludes cross-project feature
+        // orchestrators (metadata.feature) — those have their own group.
+        !session.metadata?.["feature"],
     )
     .sort(compareOrchestratorRecency);
 
@@ -123,14 +127,19 @@ export async function GET(request: Request) {
     const allSessionPrefixes = Object.entries(config.projects).map(
       ([projectId, p]) => p.sessionPrefix ?? projectId,
     );
-    let workerSessions = visibleSessions.filter(
-      (session) =>
-        !isOrchestratorSession(
-          session,
-          config.projects[session.projectId]?.sessionPrefix ?? session.projectId,
-          allSessionPrefixes,
-        ),
-    );
+    // Keep workers AND feature orchestrators (metadata.feature) in `sessions`;
+    // strip regular orchestrators (the project's main orchestrator, surfaced
+    // separately via the `orchestrators` link). Feature orchestrators ride this
+    // list so the dashboard can show them in the sidebar "Features" group and
+    // keep them out of the Kanban (detected by their stable metadata.feature).
+    let workerSessions = visibleSessions.filter((session) => {
+      const isOrch = isOrchestratorSession(
+        session,
+        config.projects[session.projectId]?.sessionPrefix ?? session.projectId,
+        allSessionPrefixes,
+      );
+      return !isOrch || Boolean(session.metadata?.["feature"]);
+    });
 
     // Convert to dashboard format
     let dashboardSessions = workerSessions.map(sessionToDashboard);

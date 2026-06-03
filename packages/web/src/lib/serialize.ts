@@ -213,7 +213,10 @@ export function listDashboardOrchestrators(
         session,
         projects[session.projectId]?.sessionPrefix ?? session.projectId,
         allSessionPrefixes,
-      )
+      ) ||
+      // Cross-project feature orchestrators (metadata.feature) are surfaced in
+      // the sidebar "Features" group, not as the project's main orchestrator.
+      session.metadata?.["feature"]
     ) {
       continue;
     }

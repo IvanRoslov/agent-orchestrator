@@ -21,11 +21,12 @@ function readLinkedProjects(project: unknown): string[] {
 const MAX_NAME_LENGTH = 200;
 
 /**
- * POST /api/feature/start — spawn a DEDICATED feature-orchestrator session in
- * the hub project (not the shared project orchestrator) on the
- * `feature-orchestrator/<slug>` branch, tasked with the cross-project feature
- * kickoff. Several features can run in parallel; the UI lists them by branch.
- * Returns the new session so the UI can open its terminal.
+ * POST /api/feature/start — spawn a DEDICATED feature orchestrator as an
+ * additional numbered orchestrator session in the hub project (not the shared
+ * project orchestrator), tagged with metadata.feature=<slug> and tasked with
+ * the cross-project feature kickoff. Several features can run in parallel; the
+ * UI lists them (by metadata.feature) in the sidebar "Features" group. Returns
+ * the new session so the UI can open its terminal.
  */
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     const session = await sessionManager.spawnOrchestrator(
       { projectId, systemPrompt },
-      { numbered: true, displayName: name },
+      { numbered: true, displayName: name, feature: slug },
     );
 
     recordActivityEvent({

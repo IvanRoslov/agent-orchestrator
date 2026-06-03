@@ -143,7 +143,7 @@ async function featureStart(
 
   const session = await sm.spawnOrchestrator(
     { projectId: hubId, systemPrompt, agent: opts.agent },
-    { numbered: true, displayName: description },
+    { numbered: true, displayName: description, feature: slug },
   );
 
   const port = config.port ?? DEFAULT_PORT;

@@ -1876,9 +1876,10 @@ export interface SessionManager {
   spawnOrchestrator(
     config: OrchestratorSpawnConfig,
     /** When `numbered`, spawn an ADDITIONAL `-orchestrator-N` session (feature
-     *  orchestrators) instead of the project's single fixed orchestrator;
-     *  `displayName` overrides the derived name. */
-    options?: { numbered?: boolean; displayName?: string },
+     *  orchestrators) instead of the project's single fixed orchestrator.
+     *  `displayName` overrides the derived name; `feature` (the slug) marks it
+     *  as a cross-project feature orchestrator in metadata. */
+    options?: { numbered?: boolean; displayName?: string; feature?: string },
   ): Promise<Session>;
   ensureOrchestrator(config: OrchestratorSpawnConfig): Promise<Session>;
   /**

@@ -1665,6 +1665,9 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
       numbered?: boolean;
       /** Override the derived display name (e.g. the feature name). */
       displayName?: string;
+      /** Mark this as a cross-project feature orchestrator (the feature slug),
+       *  written to metadata.feature for stable, branch-independent UI grouping. */
+      feature?: string;
     },
   ): Promise<Session> {
     recordActivityEvent({
@@ -1692,7 +1695,7 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
 
   async function _spawnOrchestratorInner(
     orchestratorConfig: OrchestratorSpawnConfig,
-    options?: { numbered?: boolean; displayName?: string },
+    options?: { numbered?: boolean; displayName?: string; feature?: string },
   ): Promise<Session> {
     const project = config.projects[orchestratorConfig.projectId];
     if (!project) {
@@ -2034,6 +2037,7 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
       metadata: {
         ...(reusableOpenCodeSessionId ? { opencodeSessionId: reusableOpenCodeSessionId } : {}),
         ...(displayName ? { displayName } : {}),
+        ...(options?.feature ? { feature: options.feature } : {}),
       },
     };
 
@@ -2054,6 +2058,9 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
         runtimeHandle: handle,
         opencodeSessionId: reusableOpenCodeSessionId,
         displayName,
+        // Marks this as a cross-project FEATURE orchestrator (the slug). Stable
+        // identity for the UI — independent of the agent's git branch.
+        ...(options?.feature ? { feature: options.feature } : {}),
       });
 
       if (plugins.agent.postLaunchSetup) {
