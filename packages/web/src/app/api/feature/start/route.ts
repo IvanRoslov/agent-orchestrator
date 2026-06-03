@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { buildFeatureKickoff, recordActivityEvent, slugifyFeature } from "@aoagents/ao-core";
+import {
+  buildFeatureKickoff,
+  generateOrchestratorPrompt,
+  recordActivityEvent,
+  slugifyFeature,
+} from "@aoagents/ao-core";
 import { getServices } from "@/lib/services";
 import { validateIdentifier, validateConfiguredProject, validateString } from "@/lib/validation";
 
@@ -71,18 +76,19 @@ export async function POST(request: NextRequest) {
     }
 
     const slug = slugifyFeature(name);
-    // Newlines stripped: sm.spawn passes the prompt to the agent launch; the
-    // kickoff stays a single line (still a valid instruction for the agent).
-    const kickoff = buildFeatureKickoff({ linkedProjects, description: name, slug }).replace(
-      /[\r\n]+/g,
-      " ",
-    );
+    // Spawn the feature orchestrator as an ADDITIONAL numbered orchestrator
+    // session (kind=orchestrator): stable identity, no worker lifecycle
+    // reactions, and the project's standard orchestrator is left untouched.
+    // systemPrompt = base orchestrator brief + the cross-project feature kickoff
+    // (written to a file, so multi-line is fine).
+    const systemPrompt = `${generateOrchestratorPrompt({ config, projectId, project })}\n\n---\n\n${buildFeatureKickoff(
+      { linkedProjects, description: name, slug },
+    )}`;
 
-    const session = await sessionManager.spawn({
-      projectId,
-      prompt: kickoff,
-      branch: `feature-orchestrator/${slug}`,
-    });
+    const session = await sessionManager.spawnOrchestrator(
+      { projectId, systemPrompt },
+      { numbered: true, displayName: name },
+    );
 
     recordActivityEvent({
       projectId,

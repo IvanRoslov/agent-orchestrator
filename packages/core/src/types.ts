@@ -1873,7 +1873,13 @@ export interface KillOptions {
 /** Session manager — CRUD for sessions */
 export interface SessionManager {
   spawn(config: SessionSpawnConfig): Promise<Session>;
-  spawnOrchestrator(config: OrchestratorSpawnConfig): Promise<Session>;
+  spawnOrchestrator(
+    config: OrchestratorSpawnConfig,
+    /** When `numbered`, spawn an ADDITIONAL `-orchestrator-N` session (feature
+     *  orchestrators) instead of the project's single fixed orchestrator;
+     *  `displayName` overrides the derived name. */
+    options?: { numbered?: boolean; displayName?: string },
+  ): Promise<Session>;
   ensureOrchestrator(config: OrchestratorSpawnConfig): Promise<Session>;
   /**
    * Replace the canonical orchestrator with a fresh one. If an orchestrator

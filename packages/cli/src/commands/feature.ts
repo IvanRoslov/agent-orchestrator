@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   buildFeatureKickoff,
+  generateOrchestratorPrompt,
   getGlobalConfigPath,
   loadConfig,
   slugifyFeature,
@@ -128,27 +129,29 @@ async function featureStart(
   const slug = slugifyFeature(description);
   const sm = await getSessionManager(config);
 
-  // Spawn a DEDICATED feature-orchestrator session — not the project's shared
-  // orchestrator. This keeps the standard orchestrator untouched and lets
-  // several features run in parallel. The session is identified by the
-  // `feature-orchestrator/<slug>` branch convention (the UI lists these).
-  const kickoff = buildFeatureKickoff({ slug, description, linkedProjects }).replace(
-    /[\r\n]+/g,
-    " ",
-  );
-  const session = await sm.spawn({
+  // Spawn a DEDICATED feature orchestrator as an ADDITIONAL numbered
+  // orchestrator session (`${prefix}-orchestrator-N`). It is a real
+  // orchestrator-kind session: stable identity (the agent can't reclassify it
+  // by switching git branches), no worker lifecycle reactions, and the standard
+  // project orchestrator is left untouched. systemPrompt = base orchestrator
+  // brief + the cross-project feature kickoff.
+  const systemPrompt = `${generateOrchestratorPrompt({
+    config,
     projectId: hubId,
-    prompt: kickoff,
-    branch: `feature-orchestrator/${slug}`,
-    agent: opts.agent,
-  });
+    project: hub,
+  })}\n\n---\n\n${buildFeatureKickoff({ slug, description, linkedProjects })}`;
+
+  const session = await sm.spawnOrchestrator(
+    { projectId: hubId, systemPrompt, agent: opts.agent },
+    { numbered: true, displayName: description },
+  );
 
   const port = config.port ?? DEFAULT_PORT;
   console.log(chalk.green(`✓ Feature "${slug}" started on hub "${hubId}".`));
-  console.log(`  Session: ${chalk.green(session.id)}`);
-  console.log(`  Linked:  ${linkedProjects.join(", ")}`);
-  console.log(`  View:    ${chalk.dim(projectSessionUrl(port, hubId, session.id))}`);
-  console.log(`  Track:   ${chalk.dim(`ao feature status ${slug}`)}`);
+  console.log(`  Orchestrator: ${chalk.green(session.id)}`);
+  console.log(`  Linked:       ${linkedProjects.join(", ")}`);
+  console.log(`  View:         ${chalk.dim(projectSessionUrl(port, hubId, session.id))}`);
+  console.log(`  Track:        ${chalk.dim(`ao feature status ${slug}`)}`);
   console.log(`SLUG=${slug}`);
   console.log(`SESSION=${session.id}`);
 }
@@ -158,29 +161,29 @@ async function featureStatus(slug: string): Promise<void> {
   const sm = await getSessionManager(config);
   const all = await sm.list();
 
-  const coordinatorBranch = `feature-orchestrator/${slug}`;
+  // Workers spawned by the feature orchestrator use feature/<slug>/<project>
+  // branches. The orchestrator itself is a numbered orchestrator session
+  // (listed in the dashboard "Features" group), not tracked by branch here.
   const workerPrefix = `feature/${slug}/`;
-  const coordinators = all.filter((s) => s.branch === coordinatorBranch);
   const workers = all.filter((s) => s.branch?.startsWith(workerPrefix));
 
-  if (coordinators.length === 0 && workers.length === 0) {
-    console.log(chalk.yellow(`No sessions found for feature "${slug}".`));
+  if (workers.length === 0) {
+    console.log(chalk.yellow(`No workers found for feature "${slug}" (branch ${workerPrefix}*).`));
     console.log(
       chalk.dim(
-        `Expected a coordinator on ${coordinatorBranch} and workers on ${workerPrefix}<project>.`,
+        "Workers appear once the orchestrator spawns them on feature/<slug>/<project> branches.",
       ),
     );
     return;
   }
 
-  const line = (s: (typeof all)[number]) => {
-    const pr = s.pr?.url ? ` ${chalk.dim(s.pr.url)}` : "";
-    return `  ${chalk.green(s.id)}  [${s.projectId}]  ${s.status}  ${chalk.dim(s.branch ?? "")}${pr}`;
-  };
-
   console.log(chalk.bold(`Feature: ${slug}`));
-  for (const c of coordinators) console.log(line(c) + chalk.dim("  (orchestrator)"));
-  for (const w of workers) console.log(line(w));
+  for (const w of workers) {
+    const pr = w.pr?.url ? ` ${chalk.dim(w.pr.url)}` : "";
+    console.log(
+      `  ${chalk.green(w.id)}  [${w.projectId}]  ${w.status}  ${chalk.dim(w.branch ?? "")}${pr}`,
+    );
+  }
 }
 
 export function registerFeature(program: Command): void {
