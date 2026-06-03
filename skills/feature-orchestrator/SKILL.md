@@ -28,13 +28,18 @@ a worker run ahead of a gate.
 
 ### Stage 1 — research + brainstorm (you + the human)
 
-1. Research the feature across the hub docs and linked repos.
-2. Run `superpowers:brainstorming` WITH the human to produce the feature design
+1. **ASK FIRST.** Your feature name/slug is only a label, not the spec. Your very
+   first message must ask the human to describe the feature or task — what to
+   build, why, and any constraints. Do NOT infer scope, research, plan, or write
+   anything from the title alone. Wait for their answer and ask follow-ups until
+   you understand the goal.
+2. Then research the feature across the hub docs and linked repos.
+4. Run `superpowers:brainstorming` WITH the human to produce the feature design
    doc. Save it in THIS hub repo at
    `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md` and commit it.
-3. Decompose the feature into one **slice per linked project** (what that repo
+5. Decompose the feature into one **slice per linked project** (what that repo
    must change, and the cross-project contracts between slices).
-4. **GATE:** present the doc + the per-project slices to the human. Wait for
+6. **GATE:** present the doc + the per-project slices to the human. Wait for
    explicit approval before spawning anyone.
 
 ### Stage 2 — spawn workers + worker brainstorm

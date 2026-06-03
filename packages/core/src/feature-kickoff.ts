@@ -20,11 +20,10 @@ export function slugifyFeature(description: string): string {
 /**
  * Build the kickoff message sent to the hub orchestrator to begin a feature.
  *
- * When `description`/`slug` are provided (CLI path) the brief states them
- * directly. When omitted (UI "Start feature" button, where the human gives the
- * description in chat) the brief instructs the orchestrator to ask for the
- * description first and choose its own slug. `<slug>` then stands in for the
- * slug the orchestrator will pick.
+ * The feature name/slug (when provided) is only a short LABEL — never the spec.
+ * The brief always instructs the orchestrator to ASK the human to describe the
+ * feature/task first, before inferring scope, planning, or spawning workers.
+ * `<slug>` stands in for the slug when none was provided.
  */
 export function buildFeatureKickoff(opts: {
   linkedProjects: string[];
@@ -33,17 +32,17 @@ export function buildFeatureKickoff(opts: {
 }): string {
   const { linkedProjects, description, slug } = opts;
   const branchSlug = slug ?? "<slug>";
-  const intro =
+  const titleLine =
     description && slug
-      ? [`Feature slug: ${slug}`, `Feature description: ${description}`]
-      : [
-          `The human will give you the feature description in this chat — ask for it first.`,
-          `Then choose a short kebab-case slug for the feature and use it consistently.`,
-        ];
+      ? `Feature title (a short label only — NOT the spec): "${description}" (slug: ${slug})`
+      : `No title was given yet.`;
   return [
-    `Start a new cross-project feature. Read and follow skills/feature-orchestrator/SKILL.md as your operating procedure for the entire feature.`,
+    `You are the orchestrator for a new cross-project feature. Read and follow skills/feature-orchestrator/SKILL.md as your operating procedure for the entire feature.`,
     ``,
-    ...intro,
+    titleLine,
+    ``,
+    `FIRST, before anything else: ask the human to describe the feature or task — what are we building, why, and any constraints. Do NOT infer scope, draft a plan, write a doc, or spawn workers from the title alone. Ask "What are we building? Describe the feature or task.", wait for their answer, ask follow-ups as needed, and only then begin the research + brainstorm stage.`,
+    ``,
     `Linked projects (spawn workers only into these): ${linkedProjects.join(", ")}`,
     ``,
     `Key rules from the skill:`,
@@ -51,7 +50,5 @@ export function buildFeatureKickoff(opts: {
     `- All worker questions come back to you via "ao send <your-session-id>"; you answer from feature context or escalate to the human in this chat.`,
     `- Drive workers in lockstep through gates (brainstorm -> plan -> implement -> verify -> debug). Do not advance a gate until the human approves it here.`,
     `- The feature design doc lives in this hub repo under docs/superpowers/specs/.`,
-    ``,
-    `Begin with the research + brainstorm stage now.`,
   ].join("\n");
 }

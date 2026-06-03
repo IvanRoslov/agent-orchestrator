@@ -40,13 +40,21 @@ describe("buildFeatureKickoff — with description (CLI path)", () => {
   it("states the question-funnel rule", () => {
     expect(msg).toMatch(/ao send/);
   });
+
+  it("treats the title as a label only and asks the human to describe first", () => {
+    expect(msg).toMatch(/label only/i);
+    expect(msg).toMatch(/ask the human to describe the feature or task/i);
+    expect(msg).toMatch(/do not infer scope/i);
+    // Must NOT immediately kick off brainstorming from the title.
+    expect(msg).not.toMatch(/begin with the research \+ brainstorm stage now/i);
+  });
 });
 
 describe("buildFeatureKickoff — without description (UI button path)", () => {
   const msg = buildFeatureKickoff({ linkedProjects: ["api-repo", "web-repo"] });
 
-  it("asks the human for the description in chat", () => {
-    expect(msg).toMatch(/give you the feature description in this chat/i);
+  it("asks the human to describe the feature in chat first", () => {
+    expect(msg).toMatch(/ask the human to describe the feature or task/i);
   });
 
   it("leaves the slug as a placeholder in the branch convention", () => {
