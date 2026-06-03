@@ -899,6 +899,44 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
     };
   }
 
+  /**
+   * Reserve a NUMBERED orchestrator identity (`${prefix}-orchestrator-N`).
+   *
+   * Unlike the fixed orchestrator (one per project), numbered orchestrators are
+   * additional, parallel orchestrator sessions — used for cross-project feature
+   * orchestrators. `isOrchestratorSession` and the canonical `kind` both match
+   * the `-orchestrator-\d+` id pattern, so these sessions get orchestrator
+   * treatment (no worker lifecycle reactions) and a stable identity that does
+   * not depend on the agent's git branch.
+   */
+  function reserveNumberedOrchestratorIdentity(
+    project: ProjectConfig,
+    sessionsDir: string,
+  ): { sessionId: string; tmuxName: string | undefined } {
+    const re = new RegExp(`^${escapeRegex(project.sessionPrefix)}-orchestrator-(\\d+)$`);
+    const used = new Set<number>();
+    for (const name of listMetadata(sessionsDir)) {
+      const match = name.match(re);
+      if (match) used.add(parseInt(match[1], 10));
+    }
+
+    let num = 1;
+    for (let attempts = 0; attempts < 10_000; attempts++) {
+      if (!used.has(num)) {
+        const sessionId = `${project.sessionPrefix}-orchestrator-${num}`;
+        if (reserveSessionId(sessionsDir, sessionId)) {
+          return { sessionId, tmuxName: config.configPath ? sessionId : undefined };
+        }
+      }
+      used.add(num);
+      num += 1;
+    }
+
+    throw new Error(
+      `Failed to reserve numbered orchestrator ID after 10000 attempts (prefix: ${project.sessionPrefix})`,
+    );
+  }
+
   /** Resolve which plugins to use for a project. */
   function resolvePlugins(project: ProjectConfig, agentName?: string) {
     const runtime = registry.get<Runtime>("runtime", project.runtime ?? config.defaults.runtime);
@@ -1619,7 +1657,15 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
 
   async function spawnOrchestrator(
     orchestratorConfig: OrchestratorSpawnConfig,
-    options?: { suppressFixedReservationFailure?: boolean },
+    options?: {
+      suppressFixedReservationFailure?: boolean;
+      /** Spawn an additional NUMBERED orchestrator (`-orchestrator-N`) instead of
+       *  reusing the project's single fixed orchestrator. Used for feature
+       *  orchestrators (multiple can run in parallel). */
+      numbered?: boolean;
+      /** Override the derived display name (e.g. the feature name). */
+      displayName?: string;
+    },
   ): Promise<Session> {
     recordActivityEvent({
       projectId: orchestratorConfig.projectId,
@@ -1629,7 +1675,7 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
       data: { agent: orchestratorConfig.agent ?? undefined, role: "orchestrator" },
     });
     try {
-      return await _spawnOrchestratorInner(orchestratorConfig);
+      return await _spawnOrchestratorInner(orchestratorConfig, options);
     } catch (err) {
       const project = config.projects[orchestratorConfig.projectId];
       const sessionId = project ? getOrchestratorSessionId(project) : undefined;
@@ -1644,7 +1690,10 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
     }
   }
 
-  async function _spawnOrchestratorInner(orchestratorConfig: OrchestratorSpawnConfig): Promise<Session> {
+  async function _spawnOrchestratorInner(
+    orchestratorConfig: OrchestratorSpawnConfig,
+    options?: { numbered?: boolean; displayName?: string },
+  ): Promise<Session> {
     const project = config.projects[orchestratorConfig.projectId];
     if (!project) {
       throw new Error(`Unknown project: ${orchestratorConfig.projectId}`);
@@ -1671,7 +1720,9 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
       project.orchestratorSessionStrategy,
     );
 
-    const identity = reserveFixedOrchestratorIdentity(project, sessionsDir);
+    const identity = options?.numbered
+      ? reserveNumberedOrchestratorIdentity(project, sessionsDir)
+      : reserveFixedOrchestratorIdentity(project, sessionsDir);
     const sessionId = identity.sessionId;
     const tmuxName = identity.tmuxName;
 
@@ -1944,9 +1995,11 @@ export function createSessionManager(deps: SessionManagerDeps): OpenCodeSessionM
 
     // Derive a stable display name from the orchestrator's system prompt so
     // the dashboard shows something more useful than "Ao Orchestrator 8".
-    const displayName = deriveDisplayName({
-      prompt: orchestratorConfig.systemPrompt,
-    });
+    const displayName =
+      options?.displayName ??
+      deriveDisplayName({
+        prompt: orchestratorConfig.systemPrompt,
+      });
 
     // Write metadata and run post-launch setup
     const createdAt = new Date();
