@@ -34,7 +34,7 @@ describe("buildFeatureKickoff", () => {
   });
 
   it("states the worker branch convention", () => {
-    expect(msg).toContain("feature/add-sso/<project>");
+    expect(msg).toContain("feature/add-sso/<task>");
   });
 
   it("states the question-funnel rule", () => {

@@ -7,7 +7,7 @@ trigger: You are a hub-project orchestrator that received an "ao feature start" 
 # Feature Orchestrator Skill
 
 You are the **feature orchestrator**. You own one feature end-to-end across
-several linked projects. You hold the full context; workers see only their slice.
+several linked projects. You hold the full context; workers see only their task.
 You talk to the human; workers talk to you.
 
 ## Inputs you were given (in the kickoff message)
@@ -34,24 +34,41 @@ a worker run ahead of a gate.
    anything from the title alone. Wait for their answer and ask follow-ups until
    you understand the goal.
 2. Then research the feature across the hub docs and linked repos.
-4. Run `superpowers:brainstorming` WITH the human to produce the feature design
+3. Run `superpowers:brainstorming` WITH the human to produce the feature design
    doc. Save it in THIS hub repo at
    `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md` and commit it.
-5. Decompose the feature into one **slice per linked project** (what that repo
-   must change, and the cross-project contracts between slices).
-6. **GATE:** present the doc + the per-project slices to the human. Wait for
+4. Decompose the feature into discrete **tasks** — each a focused unit of work
+   that yields ONE pull request. Typically one or more tasks per linked project;
+   split a project into multiple tasks when they are independent (so they can run
+   in parallel). Note the cross-project contracts and which tasks depend on which.
+5. **GATE:** present the doc + the per-project tasks to the human. Wait for
    explicit approval before spawning anyone.
 
 ### Stage 2 — spawn workers + worker brainstorm
 
-For each in-scope linked project, spawn a worker:
+**One worker per task. Parallelize aggressively.**
+
+- Spawn a SEPARATE worker for each task. A worker owns exactly **one task → one
+  PR**, then it is done. NEVER funnel multiple tasks/PRs through a single worker,
+  and NEVER restore a finished worker to hand it a new task — spawn a fresh
+  worker. (A worker that already merged a PR is finished; new work = new worker.)
+- Spawn workers for INDEPENDENT tasks **concurrently** (in parallel). Only
+  serialize when a task genuinely depends on another's output (e.g. a consumer
+  needs an API contract first): spawn the dependency's worker, gate on it, then
+  spawn the dependent worker.
+
+Spawn each worker on its OWN distinct branch so parallel workers never collide:
 
 ```
-ao spawn --project <project> --branch feature/<slug>/<project> --prompt "<concise brief>"
+ao spawn --project <project> --branch feature/<slug>/<task> --prompt "<concise brief>"
 ```
 
-The `--prompt` is length-limited and strips newlines, so keep it short (slug +
-one-line slice + "you are part of feature <slug>; send all questions to
+`<task>` is a short kebab-case name unique within the feature (e.g.
+`api-auth-endpoint`, `web-login-form`). Every worker branch starts with
+`feature/<slug>/`, so `ao feature status <slug>` still lists them all.
+
+The `--prompt` is length-limited and strips newlines, so keep it short (task +
+one-line scope + "you are part of feature <slug>; send all questions to
 orchestrator <your-session-id> via ao send; follow the worker rules below").
 Immediately after spawn, deliver the FULL brief:
 
@@ -59,10 +76,10 @@ Immediately after spawn, deliver the FULL brief:
 ao send <worker-session-id> --file <path-to-brief.md>
 ```
 
-The full brief must contain: the worker's slice, the relevant excerpt of the
+The full brief must contain: the worker's task, the relevant excerpt of the
 feature doc, the cross-project contracts it must honor, and these standing rules:
 
-- Run `superpowers:brainstorming` for your slice. Route EVERY clarifying question
+- Run `superpowers:brainstorming` for your task. Route EVERY clarifying question
   to me with `ao send <orchestrator-session-id> "<question>"`. Do not guess.
 - Then `superpowers:writing-plans`, then `superpowers:subagent-driven-development`
   (TDD via subagents). Do NOT cross a stage gate until I tell you to.
@@ -71,7 +88,7 @@ feature doc, the cross-project contracts it must honor, and these standing rules
 context if you can. If you cannot, ask the human HERE, then relay the answer.
 The human only ever talks to you.
 
-**GATE:** when all workers finish brainstorming, summarize the slice specs to the
+**GATE:** when all workers finish brainstorming, summarize the task specs to the
 human and wait for approval.
 
 ### Stage 3 — plan
@@ -88,24 +105,27 @@ test, and open PRs in their own repos. Track them with `ao feature status <slug>
 
 ### Stage 5 — verify
 
-Each worker confirms its slice works (tests pass, PR green). You aggregate status
+Each worker confirms its task works (tests pass, PR green). You aggregate status
 and report to the human.
 
 ### Stage 6 — debug (loop)
 
-For each bug the human reports, decide which project owns it, then spawn (or
-re-message) a fixup worker on the same `feature/<slug>/<project>` branch with a
-focused brief. Loop until the human says the feature is done.
+For each bug the human reports, decide which project owns it and treat the fix as
+a NEW task: spawn a fresh fixup worker on its own `feature/<slug>/<fix-task>`
+branch with a focused brief. Independent fixes run in parallel. Don't revive a
+finished worker. Loop until the human says the feature is done.
 
 ## Tracking
 
 - `ao feature status <slug>` lists all workers (it finds them by the
-  `feature/<slug>/<project>` branch convention). Keep the worker session IDs and
+  `feature/<slug>/` branch prefix). Keep the worker session IDs, their task, and
   their current stage in the feature doc as your durable record.
 
 ## Hard rules
 
 - Spawn workers ONLY into the linked projects from the kickoff message.
-- Always use the branch `feature/<slug>/<project>` — tracking depends on it.
+- One worker = one task = one PR. New work is always a NEW worker, never a
+  revived one. Run independent tasks in parallel.
+- Every worker branch must start with `feature/<slug>/` — tracking depends on it.
 - Gates are yours to hold. When in doubt, hold and ask the human.
 - Keep the feature doc current; it is the single source of truth.

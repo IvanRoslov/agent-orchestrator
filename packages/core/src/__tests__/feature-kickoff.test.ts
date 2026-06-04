@@ -33,8 +33,14 @@ describe("buildFeatureKickoff — with description (CLI path)", () => {
     expect(msg).toContain("web-repo");
   });
 
-  it("uses the concrete slug in the branch convention", () => {
-    expect(msg).toContain("feature/add-sso/<project>");
+  it("uses the concrete slug in the per-task branch convention", () => {
+    expect(msg).toContain("feature/add-sso/<task>");
+  });
+
+  it("tells the orchestrator to use one worker per task and parallelize", () => {
+    expect(msg).toMatch(/one worker per task/i);
+    expect(msg).toMatch(/parallel/i);
+    expect(msg).toMatch(/never restore a finished worker/i);
   });
 
   it("states the question-funnel rule", () => {
@@ -57,8 +63,8 @@ describe("buildFeatureKickoff — without description (UI button path)", () => {
     expect(msg).toMatch(/ask the human to describe the feature or task/i);
   });
 
-  it("leaves the slug as a placeholder in the branch convention", () => {
-    expect(msg).toContain("feature/<slug>/<project>");
+  it("leaves the slug as a placeholder in the per-task branch convention", () => {
+    expect(msg).toContain("feature/<slug>/<task>");
   });
 
   it("still lists linked projects and references the skill", () => {
