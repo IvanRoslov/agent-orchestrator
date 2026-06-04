@@ -4227,6 +4227,28 @@ describe("auto-cleanup on merge (#1309)", () => {
     });
   });
 
+  it("does NOT auto-cleanup an orchestrator session when its PR merges", async () => {
+    const registry = createMockRegistry({
+      runtime: plugins.runtime,
+      agent: plugins.agent,
+      scm: mergedScm(),
+    });
+    // Same inputs that kill a worker (above), but kind=orchestrator. A feature
+    // orchestrator can incidentally have a PR attributed to it; merging it must
+    // never tear the orchestrator down (#feature-orchestrator regression).
+    const session = makeSession({ status: "merged", pr: makePR(), activity: "idle" });
+    session.lifecycle.session.kind = "orchestrator";
+    const lm = setupCheck("app-1", {
+      session,
+      registry,
+      configOverride: configWithLifecycle({}),
+    });
+
+    await lm.check("app-1");
+
+    expect(mockSessionManager.kill).not.toHaveBeenCalled();
+  });
+
   it("defers cleanup when agent is still active and records pending marker", async () => {
     const registry = createMockRegistry({
       runtime: plugins.runtime,

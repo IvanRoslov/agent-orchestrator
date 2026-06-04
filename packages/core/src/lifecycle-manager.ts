@@ -2511,6 +2511,13 @@ export function createLifecycleManager(deps: LifecycleManagerDeps): LifecycleMan
   async function maybeAutoCleanupOnMerge(session: Session): Promise<void> {
     if (session.status !== SESSION_STATUS.MERGED) return;
 
+    // Orchestrators (including numbered feature orchestrators) coordinate work;
+    // they must NEVER be torn down when a PR they touched merges. Auto-cleanup
+    // on merge is for workers only. A feature orchestrator can incidentally have
+    // a PR attributed to it (e.g. its agent ran `gh` on a worker's PR), and
+    // killing it on merge would destroy the whole feature's coordinator/context.
+    if (session.lifecycle.session.kind === "orchestrator") return;
+
     // config.lifecycle is typed optional to support hand-constructed
     // configs in tests. When loaded from YAML via Zod, the schema's
     // .default({}) always populates it. The destructure below handles
