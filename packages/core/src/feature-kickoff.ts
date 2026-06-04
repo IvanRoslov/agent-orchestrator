@@ -46,7 +46,7 @@ export function buildFeatureKickoff(opts: {
     `Linked projects (spawn workers only into these): ${linkedProjects.join(", ")}`,
     ``,
     `Key rules from the skill:`,
-    `- One worker per task = one PR. Spawn a SEPARATE worker for each task; never funnel multiple PRs through one worker and never restore a finished worker to give it a new task — spawn a fresh one. Run INDEPENDENT tasks in parallel (spawn their workers concurrently); only serialize on real dependencies.`,
+    `- Default to one worker per task = one PR, and run INDEPENDENT tasks in parallel (spawn their workers concurrently) rather than funneling many PRs through a single worker. Spawn a fresh worker for new, unrelated work; reuse/restore an existing worker only when the new work is a close follow-up and its live context will make the fix faster — your judgment.`,
     `- Spawn each worker with: ao spawn --project <project> --branch feature/${branchSlug}/<task> --prompt "<short brief>" (where <task> is a short unique kebab name, e.g. api-auth).`,
     `- All worker questions come back to you via "ao send <your-session-id>"; you answer from feature context or escalate to the human in this chat.`,
     `- Drive workers in lockstep through gates (brainstorm -> plan -> implement -> verify -> debug). Do not advance a gate until the human approves it here.`,

@@ -46,12 +46,14 @@ a worker run ahead of a gate.
 
 ### Stage 2 — spawn workers + worker brainstorm
 
-**One worker per task. Parallelize aggressively.**
+**Default: one worker per task, parallelized. Reuse is a judgment call.**
 
-- Spawn a SEPARATE worker for each task. A worker owns exactly **one task → one
-  PR**, then it is done. NEVER funnel multiple tasks/PRs through a single worker,
-  and NEVER restore a finished worker to hand it a new task — spawn a fresh
-  worker. (A worker that already merged a PR is finished; new work = new worker.)
+- Default to a SEPARATE worker per task — a worker owns **one task → one PR**.
+  Don't funnel many unrelated PRs through a single worker, and for new, unrelated
+  work spawn a fresh worker rather than reviving a finished one.
+- **But use judgment:** when a follow-up or fix is a close continuation of what a
+  worker just did and its live context will get it done faster, reusing or
+  restoring that worker is the right call. Speed and context win over the rule.
 - Spawn workers for INDEPENDENT tasks **concurrently** (in parallel). Only
   serialize when a task genuinely depends on another's output (e.g. a consumer
   needs an API contract first): spawn the dependency's worker, gate on it, then
@@ -110,10 +112,11 @@ and report to the human.
 
 ### Stage 6 — debug (loop)
 
-For each bug the human reports, decide which project owns it and treat the fix as
-a NEW task: spawn a fresh fixup worker on its own `feature/<slug>/<fix-task>`
-branch with a focused brief. Independent fixes run in parallel. Don't revive a
-finished worker. Loop until the human says the feature is done.
+For each bug the human reports, decide which project owns it. Usually spawn a
+fresh fixup worker on its own `feature/<slug>/<fix-task>` branch with a focused
+brief — but if the bug is in work a worker just finished and its context still
+helps, reuse or restore that worker instead. Independent fixes run in parallel.
+Loop until the human says the feature is done.
 
 ## Tracking
 
@@ -124,8 +127,9 @@ finished worker. Loop until the human says the feature is done.
 ## Hard rules
 
 - Spawn workers ONLY into the linked projects from the kickoff message.
-- One worker = one task = one PR. New work is always a NEW worker, never a
-  revived one. Run independent tasks in parallel.
+- Default to one worker = one task = one PR, and parallelize independent tasks.
+  New unrelated work → a new worker; reuse/restore a worker when a close
+  follow-up benefits from its existing context (your judgment).
 - Every worker branch must start with `feature/<slug>/` — tracking depends on it.
 - Gates are yours to hold. When in doubt, hold and ask the human.
 - Keep the feature doc current; it is the single source of truth.

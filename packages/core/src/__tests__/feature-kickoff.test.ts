@@ -37,10 +37,10 @@ describe("buildFeatureKickoff — with description (CLI path)", () => {
     expect(msg).toContain("feature/add-sso/<task>");
   });
 
-  it("tells the orchestrator to use one worker per task and parallelize", () => {
+  it("defaults to one worker per task + parallel, but allows reuse as a judgment call", () => {
     expect(msg).toMatch(/one worker per task/i);
     expect(msg).toMatch(/parallel/i);
-    expect(msg).toMatch(/never restore a finished worker/i);
+    expect(msg).toMatch(/reuse\/restore an existing worker only when/i);
   });
 
   it("states the question-funnel rule", () => {
