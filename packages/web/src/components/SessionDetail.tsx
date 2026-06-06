@@ -13,6 +13,7 @@ import { getSessionTitle } from "@/lib/format";
 import type { ProjectInfo } from "@/lib/project-name";
 import { useSidebarContext } from "./workspace/SidebarContext";
 import { projectDashboardPath, projectSessionPath } from "@/lib/routes";
+import { isFeatureCoordinator } from "@/lib/feature-sessions";
 
 import { MobileBottomNav } from "./MobileBottomNav";
 import { SessionDetailHeader, type OrchestratorZones } from "./SessionDetailHeader";
@@ -129,6 +130,7 @@ export function SessionDetail({
       <SessionDetailHeader
         session={session}
         isOrchestrator={isOrchestrator}
+        isFeatureOrchestrator={isFeatureCoordinator(session)}
         isMobile={isMobile}
         terminalEnded={terminalEnded}
         isRestorable={isRestorable}

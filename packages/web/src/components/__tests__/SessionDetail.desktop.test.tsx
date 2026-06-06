@@ -404,6 +404,44 @@ describe("SessionDetail desktop layout", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows Kill for a feature orchestrator but not a regular orchestrator", () => {
+    const { unmount } = render(
+      <SessionDetail
+        session={makeSession({
+          id: "my-app-orchestrator",
+          projectId: "my-app",
+          status: "working",
+          activity: "active",
+          pr: null,
+        })}
+        isOrchestrator
+        projects={[{ id: "my-app", name: "My App", path: "/tmp/my-app" }]}
+      />,
+    );
+    expect(
+      within(screen.getByRole("banner")).queryByRole("button", { name: "Kill" }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <SessionDetail
+        session={makeSession({
+          id: "my-app-orchestrator-1",
+          projectId: "my-app",
+          status: "working",
+          activity: "active",
+          pr: null,
+          metadata: { feature: "metrics-v2" },
+        })}
+        isOrchestrator
+        projects={[{ id: "my-app", name: "My App", path: "/tmp/my-app" }]}
+      />,
+    );
+    expect(
+      within(screen.getByRole("banner")).getByRole("button", { name: "Kill" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders a scoped, non-repetitive orchestrator top bar", () => {
     render(
       <SessionDetail

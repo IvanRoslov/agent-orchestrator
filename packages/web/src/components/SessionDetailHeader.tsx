@@ -25,6 +25,9 @@ export interface OrchestratorZones {
 interface SessionDetailHeaderProps {
   session: DashboardSession;
   isOrchestrator: boolean;
+  /** Feature orchestrators are killable (disposable per-feature), unlike the
+   *  project's permanent orchestrator. */
+  isFeatureOrchestrator?: boolean;
   isMobile: boolean;
   terminalEnded: boolean;
   isRestorable: boolean;
@@ -42,6 +45,7 @@ interface SessionDetailHeaderProps {
 export function SessionDetailHeader({
   session,
   isOrchestrator,
+  isFeatureOrchestrator = false,
   isMobile,
   terminalEnded,
   isRestorable,
@@ -313,7 +317,7 @@ export function SessionDetailHeader({
             </svg>
             <span className="topbar-btn-label">Restore</span>
           </button>
-        ) : !isOrchestrator && !terminalEnded ? (
+        ) : (!isOrchestrator || isFeatureOrchestrator) && !terminalEnded ? (
           <button
             type="button"
             className="dashboard-app-btn dashboard-app-btn--danger"
