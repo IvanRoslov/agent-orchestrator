@@ -82,14 +82,25 @@ export async function POST(request: NextRequest) {
     // reactions, and the project's standard orchestrator is left untouched.
     // systemPrompt = base orchestrator brief + the cross-project feature kickoff
     // (written to a file, so multi-line is fine).
-    const systemPrompt = `${generateOrchestratorPrompt({ config, projectId, project })}\n\n---\n\n${buildFeatureKickoff(
-      { linkedProjects, description: name, slug },
-    )}`;
+    const systemPrompt = generateOrchestratorPrompt({ config, projectId, project });
 
     const session = await sessionManager.spawnOrchestrator(
       { projectId, systemPrompt },
       { numbered: true, displayName: name, feature: slug },
     );
+
+    // Deliver the feature kickoff as the initial task message so the orchestrator
+    // acts at startup (reads the feature-orchestrator skill, asks the human to
+    // describe the feature). claude-code has no post-launch trigger, so without
+    // this the session just sits idle. Best-effort: the session already exists.
+    try {
+      await sessionManager.send(
+        session.id,
+        buildFeatureKickoff({ linkedProjects, description: name, slug }),
+      );
+    } catch {
+      /* best effort — user can message the orchestrator to kick it off */
+    }
 
     recordActivityEvent({
       projectId,

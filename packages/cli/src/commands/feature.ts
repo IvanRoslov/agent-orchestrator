@@ -135,16 +135,22 @@ async function featureStart(
   // by switching git branches), no worker lifecycle reactions, and the standard
   // project orchestrator is left untouched. systemPrompt = base orchestrator
   // brief + the cross-project feature kickoff.
-  const systemPrompt = `${generateOrchestratorPrompt({
-    config,
-    projectId: hubId,
-    project: hub,
-  })}\n\n---\n\n${buildFeatureKickoff({ slug, description, linkedProjects })}`;
+  const systemPrompt = generateOrchestratorPrompt({ config, projectId: hubId, project: hub });
 
   const session = await sm.spawnOrchestrator(
     { projectId: hubId, systemPrompt, agent: opts.agent },
     { numbered: true, displayName: description, feature: slug },
   );
+
+  // Deliver the feature kickoff as the initial task message so the orchestrator
+  // acts at startup (reads the feature-orchestrator skill, asks the human to
+  // describe the feature). claude-code has no post-launch trigger, so without
+  // this the session just sits idle. Best-effort: the session already exists.
+  try {
+    await sm.send(session.id, buildFeatureKickoff({ slug, description, linkedProjects }));
+  } catch {
+    /* best effort — user can message the orchestrator to kick it off */
+  }
 
   const port = config.port ?? DEFAULT_PORT;
   console.log(chalk.green(`✓ Feature "${slug}" started on hub "${hubId}".`));
