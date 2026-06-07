@@ -1062,8 +1062,19 @@ function ProjectSidebarInner({
 
               {/* Features (dedicated feature-orchestrator sessions) */}
               {!isDegraded && isExpanded && featureSessions.length > 0 ? (
-                <div className="project-sidebar__sessions">
-                  <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                <div className="project-sidebar__sessions border-b border-[var(--color-border-subtle)] pb-1.5">
+                  <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                    <svg
+                      width="10"
+                      height="10"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 21V4h12l-2.5 4 2.5 4H5" />
+                    </svg>
                     Features
                   </div>
                   {featureSessions.map((session) => {
@@ -1112,6 +1123,11 @@ function ProjectSidebarInner({
               {/* Sessions */}
               {!isDegraded && isExpanded && (
                 <div className="project-sidebar__sessions">
+                  {featureSessions.length > 0 && visibleSessions.length > 0 ? (
+                    <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                      Sessions
+                    </div>
+                  ) : null}
                   {sessions === null ? (
                     <div className="space-y-2 px-3 py-2" aria-label="Loading sessions">
                       {Array.from({ length: 3 }, (_, index) => (
