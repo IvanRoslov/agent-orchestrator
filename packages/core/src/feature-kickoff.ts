@@ -41,15 +41,16 @@ export function buildFeatureKickoff(opts: {
     ``,
     titleLine,
     ``,
-    `FIRST, before anything else: ask the human to describe the feature or task — what are we building, why, and any constraints. Do NOT infer scope, draft a plan, write a doc, or spawn workers from the title alone. Ask "What are we building? Describe the feature or task.", wait for their answer, ask follow-ups as needed, and only then begin the research + brainstorm stage.`,
+    `FIRST, before anything else: ask the human to describe the feature or task — what are we building, why, and any constraints. Don't act on the title alone (no inferring scope, planning, spawning, or writing before you understand the goal). Ask "What are we building? Describe the feature or task.", wait for their answer, ask follow-ups as needed, and only then begin the research + brainstorm stage.`,
     ``,
     `Linked projects (spawn workers only into these): ${linkedProjects.join(", ")}`,
     ``,
     `Key rules from the skill:`,
+    `- You run INSIDE the hub repo. You MAY do hub-repo work yourself — edit/commit files and open PRs in THIS repo (the feature design doc, hub-level docs, etc.) — without spawning a worker. Use workers for the LINKED projects, which you can't edit directly.`,
     `- Default to one worker per task = one PR, and run INDEPENDENT tasks in parallel (spawn their workers concurrently) rather than funneling many PRs through a single worker. Spawn a fresh worker for new, unrelated work; reuse/restore an existing worker only when the new work is a close follow-up and its live context will make the fix faster — your judgment.`,
     `- Spawn each worker with: ao spawn --project <project> --branch feature/${branchSlug}/<task> --prompt "<short brief>" (where <task> is a short unique kebab name, e.g. api-auth).`,
     `- All worker questions come back to you via "ao send <your-session-id>"; you answer from feature context or escalate to the human in this chat.`,
     `- Drive workers in lockstep through gates (brainstorm -> plan -> implement -> verify -> debug). Do not advance a gate until the human approves it here.`,
-    `- The feature design doc lives in this hub repo under docs/superpowers/specs/.`,
+    `- The feature design doc lives in this hub repo under docs/superpowers/specs/ — commit it (open a hub PR if that's your workflow).`,
   ].join("\n");
 }

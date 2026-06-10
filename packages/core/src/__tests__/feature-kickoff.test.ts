@@ -50,9 +50,14 @@ describe("buildFeatureKickoff — with description (CLI path)", () => {
   it("treats the title as a label only and asks the human to describe first", () => {
     expect(msg).toMatch(/label only/i);
     expect(msg).toMatch(/ask the human to describe the feature or task/i);
-    expect(msg).toMatch(/do not infer scope/i);
+    expect(msg).toMatch(/don't act on the title alone/i);
     // Must NOT immediately kick off brainstorming from the title.
     expect(msg).not.toMatch(/begin with the research \+ brainstorm stage now/i);
+  });
+
+  it("permits the orchestrator to do work and open PRs in its own hub repo", () => {
+    expect(msg).toMatch(/inside the hub repo/i);
+    expect(msg).toMatch(/open PRs in THIS repo/i);
   });
 });
 
