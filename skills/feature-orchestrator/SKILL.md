@@ -144,4 +144,6 @@ Loop until the human says the feature is done.
   follow-up benefits from its existing context (your judgment).
 - Every worker branch must start with `feature/<slug>/` — tracking depends on it.
 - Gates are yours to hold. When in doubt, hold and ask the human.
+- Language: write to workers (briefs + every `ao send` to a worker) in ENGLISH.
+  Reply to the human in the language the human writes to you in (mirror it).
 - Keep the feature doc current; it is the single source of truth.

@@ -51,6 +51,7 @@ export function buildFeatureKickoff(opts: {
     `- Spawn each worker with: ao spawn --project <project> --branch feature/${branchSlug}/<task> --prompt "<short brief>" (where <task> is a short unique kebab name, e.g. api-auth).`,
     `- All worker questions come back to you via "ao send <your-session-id>"; you answer from feature context or escalate to the human in this chat.`,
     `- Tell every worker there is NO human at its terminal: it must run non-interactively (never block on prompts/approvals/REPLs; prefer -y/--yes/--no-edit/--no-pager) and route every question or approval to you via "ao send <your-session-id>" — never hang waiting for a person.`,
+    `- Language: brief and message workers (ao send) in ENGLISH; reply to the human in the language the human writes to you in (mirror it).`,
     `- Drive workers in lockstep through gates (brainstorm -> plan -> implement -> verify -> debug). Do not advance a gate until the human approves it here.`,
     `- The feature design doc lives in this hub repo under docs/superpowers/specs/ — commit it (open a hub PR if that's your workflow).`,
   ].join("\n");

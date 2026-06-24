@@ -64,6 +64,11 @@ describe("buildFeatureKickoff — with description (CLI path)", () => {
     expect(msg).toMatch(/no human at its terminal/i);
     expect(msg).toMatch(/non-interactively/i);
   });
+
+  it("sets the language rule (English to workers, mirror the human)", () => {
+    expect(msg).toMatch(/in ENGLISH/);
+    expect(msg).toMatch(/reply to the human in the language/i);
+  });
 });
 
 describe("buildFeatureKickoff — without description (UI button path)", () => {
