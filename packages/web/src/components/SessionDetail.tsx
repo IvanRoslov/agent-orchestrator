@@ -16,6 +16,7 @@ import { projectDashboardPath, projectSessionPath } from "@/lib/routes";
 import { isFeatureCoordinator } from "@/lib/feature-sessions";
 
 import { MobileBottomNav } from "./MobileBottomNav";
+import { MobileTerminalInputDock } from "./MobileTerminalInputDock";
 import { SessionDetailHeader, type OrchestratorZones } from "./SessionDetailHeader";
 import { SessionEndedSummary } from "./SessionEndedSummary";
 import { SessionInspector } from "./SessionInspector";
@@ -52,6 +53,21 @@ export function SessionDetail({
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery(MOBILE_BREAKPOINT);
+  const isTouch = useMediaQuery("(pointer: coarse)");
+  const [dockOverride, setDockOverride] = useState<boolean | null>(null);
+  useEffect(() => {
+    const stored = window.localStorage.getItem("ao:terminalInputDock");
+    if (stored === "1") setDockOverride(true);
+    else if (stored === "0") setDockOverride(false);
+  }, []);
+  const dockVisible = dockOverride ?? isTouch;
+  const toggleInputDock = useCallback(() => {
+    setDockOverride((prev) => {
+      const next = !(prev ?? isTouch);
+      window.localStorage.setItem("ao:terminalInputDock", next ? "1" : "0");
+      return next;
+    });
+  }, [isTouch]);
   const sidebarCtx = useSidebarContext();
   const startFullscreen = searchParams.get("fullscreen") === "true";
   const [showTerminal, setShowTerminal] = useState(false);
@@ -143,6 +159,8 @@ export function SessionDetail({
         onToggleSidebar={sidebarCtx?.onToggleSidebar ?? (() => {})}
         onRestore={handleRestore}
         onKill={handleKill}
+        inputDockVisible={dockVisible}
+        onToggleInputDock={toggleInputDock}
       />
       <main className="session-detail-page session-workspace flex-1 min-h-0 flex bg-[var(--color-bg-base)]">
         <div className="session-workspace__main flex-1 min-h-0 flex flex-col">
@@ -171,6 +189,9 @@ export function SessionDetail({
               autoFocus
             />
           )}
+          {showTerminal && !terminalEnded && dockVisible ? (
+            <MobileTerminalInputDock sessionId={session.id} projectId={session.projectId} />
+          ) : null}
         </div>
         {/* The orchestrator session has no PR/changes/browser to inspect — give
             it the full-width terminal (no inspector rail). */}

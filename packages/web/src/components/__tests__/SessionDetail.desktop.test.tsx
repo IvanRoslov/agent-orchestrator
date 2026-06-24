@@ -23,6 +23,11 @@ const { directTerminalPropsMock } = vi.hoisted(() => ({
   directTerminalPropsMock: vi.fn(),
 }));
 
+vi.mock("@/providers/MuxProvider", () => ({
+  useMux: () => ({ writeTerminal: vi.fn() }),
+  useMuxOptional: () => undefined,
+}));
+
 vi.mock("../DirectTerminal", () => ({
   DirectTerminal: (props: { sessionId: string; appearance?: "theme" | "dark" }) => {
     directTerminalPropsMock(props);
@@ -696,5 +701,19 @@ describe("SessionDetail desktop layout", () => {
         appearance: "theme",
       }),
     );
+  });
+
+  it("renders the input dock when forced on via the toggle", () => {
+    render(
+      <SessionDetail
+        session={makeSession({ id: "app-1", projectId: "my-app", status: "working", activity: "active" })}
+        projects={[{ id: "my-app", name: "My App", path: "/tmp/my-app" }]}
+      />,
+    );
+    expect(screen.queryByLabelText("Terminal input")).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole("banner")).getByRole("button", { name: "Toggle on-screen keyboard" }),
+    );
+    expect(screen.getByLabelText("Terminal input")).toBeInTheDocument();
   });
 });
