@@ -59,6 +59,11 @@ describe("buildFeatureKickoff — with description (CLI path)", () => {
     expect(msg).toMatch(/inside the hub repo/i);
     expect(msg).toMatch(/open PRs in THIS repo/i);
   });
+
+  it("tells the orchestrator to brief workers as non-interactive (no human at terminal)", () => {
+    expect(msg).toMatch(/no human at its terminal/i);
+    expect(msg).toMatch(/non-interactively/i);
+  });
 });
 
 describe("buildFeatureKickoff — without description (UI button path)", () => {

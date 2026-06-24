@@ -75,8 +75,9 @@ ao spawn --project <project> --branch feature/<slug>/<task> --prompt "<concise b
 `feature/<slug>/`, so `ao feature status <slug>` still lists them all.
 
 The `--prompt` is length-limited and strips newlines, so keep it short (task +
-one-line scope + "you are part of feature <slug>; send all questions to
-orchestrator <your-session-id> via ao send; follow the worker rules below").
+one-line scope + "you are part of feature <slug>; NO human is at your terminal —
+run non-interactively and send all questions to orchestrator <your-session-id>
+via ao send; follow the worker rules below").
 Immediately after spawn, deliver the FULL brief:
 
 ```
@@ -86,6 +87,12 @@ ao send <worker-session-id> --file <path-to-brief.md>
 The full brief must contain: the worker's task, the relevant excerpt of the
 feature doc, the cross-project contracts it must honor, and these standing rules:
 
+- **There is NO human at your terminal.** Never wait for interactive input or
+  approval prompts, and never run interactive / TTY-blocking commands (no REPLs,
+  no `-i` flags, no blocking pager). Run fully autonomously and non-interactively
+  — prefer non-interactive flags (`-y`/`--yes`, `git … --no-edit`, `--no-pager`).
+  If something would otherwise prompt or block, pick a safe default or ask me via
+  `ao send <orchestrator-session-id>` — but NEVER hang waiting for a person.
 - Run `superpowers:brainstorming` for your task. Route EVERY clarifying question
   to me with `ao send <orchestrator-session-id> "<question>"`. Do not guess.
 - Then `superpowers:writing-plans`, then `superpowers:subagent-driven-development`
