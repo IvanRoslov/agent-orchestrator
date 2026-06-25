@@ -54,6 +54,21 @@ function renderInline(text: string): ReactNode[] {
 
 const HEADING_CLASS = ["text-base", "text-base", "text-sm", "text-sm", "text-sm", "text-sm"];
 
+/** Split a GFM table row into trimmed cells, dropping the outer pipes. */
+function parseTableRow(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+  return s.split("|").map((c) => c.trim());
+}
+
+/** A GFM delimiter row: every cell is dashes with optional alignment colons. */
+function isTableDelimiter(line: string): boolean {
+  if (!line.includes("|") && !line.includes("-")) return false;
+  const cells = parseTableRow(line);
+  return cells.length > 0 && cells.every((c) => /^:?-{1,}:?$/.test(c));
+}
+
 /** Render a block of Markdown text as themed React elements. */
 export function Markdown({ text }: { text: string }) {
   const lines = text.replace(/\r/g, "").split("\n");
@@ -119,6 +134,53 @@ export function Markdown({ text }: { text: string }) {
     if (line.trim() === "") {
       flushPara();
       flushList();
+      continue;
+    }
+
+    // GFM table: a header row followed by a delimiter row.
+    if (line.includes("|") && i + 1 < lines.length && isTableDelimiter(lines[i + 1])) {
+      flushPara();
+      flushList();
+      const header = parseTableRow(line);
+      i += 2; // consume header + delimiter
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim() !== "") {
+        rows.push(parseTableRow(lines[i]));
+        i++;
+      }
+      i--; // step back so the for-loop's increment lands on the next line
+      blocks.push(
+        <div key={`t-${blocks.length}`} className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                {header.map((h, hi) => (
+                  <th
+                    key={hi}
+                    className="border border-[var(--color-border-subtle)] px-2 py-1 text-left font-semibold text-[var(--color-text-primary)]"
+                  >
+                    {renderInline(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri}>
+                  {header.map((_h, ci) => (
+                    <td
+                      key={ci}
+                      className="border border-[var(--color-border-subtle)] px-2 py-1 align-top text-[var(--color-text-secondary)]"
+                    >
+                      {renderInline(r[ci] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
       continue;
     }
 

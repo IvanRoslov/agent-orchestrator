@@ -25,4 +25,21 @@ describe("Markdown", () => {
     render(<Markdown text={"```\nconst x = 1;\n```"} />);
     expect(screen.getByText("const x = 1;").tagName).toBe("PRE");
   });
+
+  it("renders GFM tables", () => {
+    render(
+      <Markdown text={"| Name | Role |\n| --- | --- |\n| Ada | Eng |\n| Bo | PM |"} />,
+    );
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByText("Name").tagName).toBe("TH");
+    expect(screen.getByText("Role").tagName).toBe("TH");
+    expect(screen.getByText("Ada").tagName).toBe("TD");
+    expect(screen.getByText("PM").tagName).toBe("TD");
+    expect(screen.getAllByRole("row")).toHaveLength(3); // header + 2 body rows
+  });
+
+  it("does not treat a plain pipe line as a table without a delimiter row", () => {
+    render(<Markdown text={"a | b | c is just text"} />);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
 });
