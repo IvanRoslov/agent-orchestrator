@@ -32,7 +32,17 @@ export function SessionTranscriptView({
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as TranscriptResponse);
+      const next = (await res.json()) as TranscriptResponse;
+      setData((prev) => {
+        // The Claude JSONL is append-only, so a shorter entry list is always a
+        // transient read race (the last line caught mid-write → unparseable →
+        // skipped this poll). Keep the longer list to stop the last message
+        // from flickering out, but still adopt the fresh status/trigger.
+        if (prev && next.entries.length < prev.entries.length) {
+          return { ...next, entries: prev.entries };
+        }
+        return next;
+      });
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load transcript");
@@ -40,6 +50,7 @@ export function SessionTranscriptView({
   }, [sessionId]);
 
   useEffect(() => {
+    setData(null); // reset on session switch so the no-shrink guard can't keep stale entries
     void refresh();
     const t = setInterval(() => void refresh(), POLL_MS);
     return () => clearInterval(t);
