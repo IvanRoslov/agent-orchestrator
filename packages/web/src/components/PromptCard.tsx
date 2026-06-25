@@ -3,8 +3,10 @@
 import { useState } from "react";
 import type { TranscriptPrompt } from "@/lib/transcript-types";
 
-// Option tap sends the 1-based index string followed by "Enter" (Claude Code's
-// numbered-choice protocol: typing the digit then Enter selects the option).
+// Keystroke mapping (assumed; confirm against a live Claude permission prompt):
+// option tap → [digit, "Enter"]; Interrupt/Deny → ["Escape"]; Approve → ["Enter"].
+// If a prompt needs arrow navigation or C-c instead, adjust onKeys here + the test;
+// the free-text answer row is always available as a fallback.
 export function PromptCard({
   prompt,
   onKeys,
