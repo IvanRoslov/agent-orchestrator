@@ -26,6 +26,31 @@ function ToolCall({ name, input }: { name: string; input: string }) {
   );
 }
 
+function ToolResult({ text, isError }: { text: string; isError: boolean }) {
+  const [open, setOpen] = useState(false);
+  const tone = isError
+    ? "border-[var(--color-status-error)] text-[var(--color-status-error)]"
+    : "border-[var(--color-border-subtle)] bg-[var(--color-bg-inset)] text-[var(--color-text-secondary)]";
+  return (
+    <div className={"rounded border text-xs " + tone}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left font-mono"
+        aria-expanded={open}
+      >
+        <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+        <span>{isError ? "Error" : "Result"}</span>
+      </button>
+      {open ? (
+        <pre className="overflow-x-auto whitespace-pre-wrap break-words px-2 pb-2 font-mono text-[11px]">
+          {text}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
 export function TranscriptMessageList({ entries }: { entries: TranscriptEntry[] }) {
   return (
     <div className="flex flex-col gap-2 p-3">
@@ -47,19 +72,7 @@ export function TranscriptMessageList({ entries }: { entries: TranscriptEntry[] 
         if (entry.kind === "tool_use") {
           return <ToolCall key={i} name={entry.name} input={entry.input} />;
         }
-        return (
-          <pre
-            key={i}
-            className={
-              "overflow-x-auto whitespace-pre-wrap break-words rounded border px-2 py-1.5 font-mono text-[11px] " +
-              (entry.isError
-                ? "border-[var(--color-status-error)] text-[var(--color-status-error)]"
-                : "border-[var(--color-border-subtle)] text-[var(--color-text-secondary)]")
-            }
-          >
-            {entry.text}
-          </pre>
-        );
+        return <ToolResult key={i} text={entry.text} isError={entry.isError} />;
       })}
     </div>
   );

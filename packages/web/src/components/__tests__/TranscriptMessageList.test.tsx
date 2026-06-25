@@ -21,13 +21,23 @@ describe("TranscriptMessageList", () => {
     expect(screen.getByText(/npm test/)).toBeInTheDocument();
   });
 
-  it("styles an error tool result with the error color token", () => {
+  it("collapses tool results until clicked", () => {
+    render(<TranscriptMessageList entries={entries} />);
+    // Result content hidden until expanded.
+    expect(screen.queryByText("2 passed")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Result/ }));
+    expect(screen.getByText("2 passed")).toBeInTheDocument();
+  });
+
+  it("labels an error tool result with the error color token", () => {
     render(
       <TranscriptMessageList
         entries={[{ kind: "tool_result", text: "boom", isError: true }]}
       />,
     );
-    const block = screen.getByText("boom");
-    expect(block.className).toContain("var(--color-status-error)");
+    const header = screen.getByRole("button", { name: /Error/ }).parentElement;
+    expect(header?.className).toContain("var(--color-status-error)");
+    fireEvent.click(screen.getByRole("button", { name: /Error/ }));
+    expect(screen.getByText("boom")).toBeInTheDocument();
   });
 });
