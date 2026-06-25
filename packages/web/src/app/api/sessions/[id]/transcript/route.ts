@@ -4,8 +4,7 @@ import { join } from "node:path";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { Session } from "@aoagents/ao-core";
-import { readLastActivityEntry, checkActivityLogState } from "@aoagents/ao-core";
+import { type Session, readLastActivityEntry, checkActivityLogState } from "@aoagents/ao-core";
 import {
   toClaudeProjectPath,
   resolveWorkspaceForClaude,
