@@ -208,7 +208,7 @@ export function SessionDetail({
               autoFocus
             />
           )}
-          {showTerminal && !terminalEnded && dockVisible ? (
+          {showTerminal && !terminalEnded && !transcriptVisible && dockVisible ? (
             <MobileTerminalInputDock sessionId={session.id} projectId={session.projectId} />
           ) : null}
         </div>
