@@ -29,10 +29,12 @@ export async function buildTranscript(
   if (activity.trigger) response.trigger = activity.trigger;
   if (status === "waiting_input" || status === "blocked") {
     const captured = await deps.capturePane(session);
+    // Only surface a prompt card when the screen shows a real interactive
+    // selection (parsePrompt requires a cursor glyph). A non-empty screen with
+    // no recognizable prompt is NOT turned into a card — that produced phantom
+    // cards over ordinary terminal output (e.g. a numbered list Claude printed).
     const prompt = parsePrompt(captured);
     if (prompt) response.prompt = prompt;
-    else if (captured.trim())
-      response.prompt = { question: "The agent is waiting for input.", options: [], raw: captured.trim() };
   }
   return response;
 }

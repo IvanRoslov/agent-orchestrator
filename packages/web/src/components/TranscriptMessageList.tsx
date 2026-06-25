@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { TranscriptEntry } from "@/lib/transcript-types";
+import { Markdown } from "./Markdown";
 
 function ToolCall({ name, input }: { name: string; input: string }) {
   const [open, setOpen] = useState(false);
@@ -33,9 +34,13 @@ export function TranscriptMessageList({ entries }: { entries: TranscriptEntry[] 
           const isUser = entry.role === "user";
           return (
             <div key={i} className={cnRole(isUser)}>
-              <div className="whitespace-pre-wrap break-words text-sm text-[var(--color-text-primary)]">
-                {entry.text}
-              </div>
+              {isUser ? (
+                <div className="whitespace-pre-wrap break-words text-sm text-[var(--color-text-primary)]">
+                  {entry.text}
+                </div>
+              ) : (
+                <Markdown text={entry.text} />
+              )}
             </div>
           );
         }

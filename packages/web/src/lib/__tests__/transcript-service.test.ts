@@ -45,4 +45,18 @@ describe("buildTranscript", () => {
     await buildTranscript(baseSession, d);
     expect(d.capturePane).not.toHaveBeenCalled();
   });
+
+  it("does NOT set a prompt when waiting but the screen has no real prompt", async () => {
+    // Stale waiting_input + ordinary output (a numbered list, no cursor) must
+    // not produce a phantom prompt card.
+    const res = await buildTranscript(
+      baseSession,
+      deps({
+        readActivity: vi.fn().mockResolvedValue({ state: "waiting_input", trigger: "Bash" }),
+        capturePane: vi.fn().mockResolvedValue("Here are the steps:\n1. one\n2. two"),
+      }),
+    );
+    expect(res.status).toBe("waiting_input");
+    expect(res.prompt).toBeUndefined();
+  });
 });
