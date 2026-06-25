@@ -1,13 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-vi.mock("@/lib/services", () => ({ getServices: vi.fn() }));
-vi.mock("@/lib/observability", () => ({
-  getCorrelationId: vi.fn(),
-  jsonWithCorrelation: vi.fn(),
-}));
-vi.mock("../../../../../../server/tmux-utils", () => ({ findTmux: vi.fn() }));
-
-import { validateKeyTokens } from "../../app/api/sessions/[id]/keys/route";
+import { validateKeyTokens } from "../key-allowlist";
 
 describe("validateKeyTokens", () => {
   it("accepts allowlisted tokens", () => {

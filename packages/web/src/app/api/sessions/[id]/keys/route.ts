@@ -4,21 +4,10 @@ import { promisify } from "node:util";
 import { getServices } from "@/lib/services";
 import { validateIdentifier } from "@/lib/validation";
 import { getCorrelationId, jsonWithCorrelation } from "@/lib/observability";
+import { validateKeyTokens } from "@/lib/key-allowlist";
 import { findTmux } from "../../../../../../server/tmux-utils";
 
 const execFileAsync = promisify(execFile);
-
-const ALLOWED = new Set([
-  "Enter", "Escape", "Tab", "Up", "Down", "Left", "Right", "C-c",
-  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-]);
-
-/** Validate the requested key tokens against the allowlist. Returns null if invalid. */
-export function validateKeyTokens(tokens: unknown): string[] | null {
-  if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > 8) return null;
-  if (!tokens.every((t) => typeof t === "string" && ALLOWED.has(t))) return null;
-  return tokens as string[];
-}
 
 /** POST /api/sessions/:id/keys — send allowlisted control keys via tmux send-keys. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
