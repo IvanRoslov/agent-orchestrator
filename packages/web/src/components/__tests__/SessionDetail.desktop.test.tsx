@@ -28,6 +28,10 @@ vi.mock("@/providers/MuxProvider", () => ({
   useMuxOptional: () => undefined,
 }));
 
+vi.mock("@/hooks/useSpeechRecognition", () => ({
+  useSpeechRecognition: () => ({ supported: false, listening: false, start: vi.fn(), stop: vi.fn() }),
+}));
+
 vi.mock("../DirectTerminal", () => ({
   DirectTerminal: (props: { sessionId: string; appearance?: "theme" | "dark" }) => {
     directTerminalPropsMock(props);
@@ -715,5 +719,20 @@ describe("SessionDetail desktop layout", () => {
       within(screen.getByRole("banner")).getByRole("button", { name: "Toggle on-screen keyboard" }),
     );
     expect(screen.getByLabelText("Terminal input")).toBeInTheDocument();
+  });
+
+  it("switches to the transcript view via the header toggle", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ entries: [], status: "idle" }) }));
+    render(
+      <SessionDetail
+        session={makeSession({ id: "app-1", projectId: "my-app", status: "working", activity: "active" })}
+        projects={[{ id: "my-app", name: "My App", path: "/tmp/my-app" }]}
+      />,
+    );
+    fireEvent.click(
+      within(screen.getByRole("banner")).getByRole("button", { name: "Toggle transcript view" }),
+    );
+    await screen.findByText("Idle");
+    vi.unstubAllGlobals();
   });
 });

@@ -18,6 +18,7 @@ import { isFeatureCoordinator } from "@/lib/feature-sessions";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { MobileTerminalInputDock } from "./MobileTerminalInputDock";
 import { SessionDetailHeader, type OrchestratorZones } from "./SessionDetailHeader";
+import { SessionTranscriptView } from "./SessionTranscriptView";
 import { SessionEndedSummary } from "./SessionEndedSummary";
 import { SessionInspector } from "./SessionInspector";
 
@@ -65,6 +66,20 @@ export function SessionDetail({
     setDockOverride((prev) => {
       const next = !(prev ?? isTouch);
       window.localStorage.setItem("ao:terminalInputDock", next ? "1" : "0");
+      return next;
+    });
+  }, [isTouch]);
+  const [transcriptOverride, setTranscriptOverride] = useState<boolean | null>(null);
+  useEffect(() => {
+    const stored = window.localStorage.getItem("ao:showTranscript");
+    if (stored === "1") setTranscriptOverride(true);
+    else if (stored === "0") setTranscriptOverride(false);
+  }, []);
+  const transcriptVisible = transcriptOverride ?? isTouch;
+  const toggleTranscript = useCallback(() => {
+    setTranscriptOverride((prev) => {
+      const next = !(prev ?? isTouch);
+      window.localStorage.setItem("ao:showTranscript", next ? "1" : "0");
       return next;
     });
   }, [isTouch]);
@@ -161,6 +176,8 @@ export function SessionDetail({
         onKill={handleKill}
         inputDockVisible={dockVisible}
         onToggleInputDock={toggleInputDock}
+        transcriptVisible={transcriptVisible}
+        onToggleTranscript={toggleTranscript}
       />
       <main className="session-detail-page session-workspace flex-1 min-h-0 flex bg-[var(--color-bg-base)]">
         <div className="session-workspace__main flex-1 min-h-0 flex flex-col">
@@ -175,6 +192,8 @@ export function SessionDetail({
               isRestorable={isRestorable}
               onRestore={handleRestore}
             />
+          ) : transcriptVisible ? (
+            <SessionTranscriptView sessionId={session.id} projectId={session.projectId} />
           ) : (
             <DirectTerminal
               sessionId={session.id}
@@ -189,7 +208,7 @@ export function SessionDetail({
               autoFocus
             />
           )}
-          {showTerminal && !terminalEnded && dockVisible ? (
+          {showTerminal && !terminalEnded && !transcriptVisible && dockVisible ? (
             <MobileTerminalInputDock sessionId={session.id} projectId={session.projectId} />
           ) : null}
         </div>
