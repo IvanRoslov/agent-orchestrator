@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { TranscriptResponse, TranscriptStatus } from "@/lib/transcript-types";
 import { TranscriptMessageList } from "./TranscriptMessageList";
 import { TranscriptComposer } from "./TranscriptComposer";
-import { PromptCard } from "./PromptCard";
+import { TranscriptKeyPad } from "./TranscriptKeyPad";
 
 const POLL_MS = 4000;
 
@@ -80,16 +80,7 @@ export function SessionTranscriptView({
         <TranscriptMessageList entries={data?.entries ?? []} />
         <div ref={bottomRef} />
       </div>
-      {data?.prompt ? (
-        <PromptCard
-          prompt={data.prompt}
-          onKeys={sendKeys}
-          onAnswer={sendMessage}
-          onDiscuss={() => {
-            /* Discuss is a no-op affordance in v1; composer below stays focused */
-          }}
-        />
-      ) : null}
+      <TranscriptKeyPad onKeys={sendKeys} />
       <TranscriptComposer onSend={sendMessage} />
     </div>
   );

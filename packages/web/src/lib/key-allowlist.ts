@@ -3,7 +3,7 @@
 // Kept in lib (not the route file) because Next.js App Router route modules may
 // only export route handlers — a non-handler export breaks `next build`.
 const ALLOWED = new Set([
-  "Enter", "Escape", "Tab", "Up", "Down", "Left", "Right", "C-c",
+  "Enter", "Escape", "Tab", "Up", "Down", "Left", "Right", "Space", "C-c",
   "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
 ]);
 

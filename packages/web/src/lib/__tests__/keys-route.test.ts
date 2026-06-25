@@ -7,6 +7,7 @@ describe("validateKeyTokens", () => {
     expect(validateKeyTokens(["1", "Enter"])).toEqual(["1", "Enter"]);
     expect(validateKeyTokens(["Escape"])).toEqual(["Escape"]);
     expect(validateKeyTokens(["Up", "Enter"])).toEqual(["Up", "Enter"]);
+    expect(validateKeyTokens(["Space"])).toEqual(["Space"]);
     expect(validateKeyTokens(["C-c"])).toEqual(["C-c"]);
   });
 
