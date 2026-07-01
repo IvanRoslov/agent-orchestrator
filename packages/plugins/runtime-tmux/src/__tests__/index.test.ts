@@ -413,7 +413,8 @@ describe("runtime.sendMessage()", () => {
   /** Last `send-keys` arg array (the actual keys/text), for assertions. */
   function lastSendKeys(): string[] | undefined {
     const calls = mockExecFileCustom.mock.calls as Array<[string, string[]]>;
-    return calls.map(([, args]) => args).findLast((args) => args[0] === "send-keys");
+    const sendKeyCalls = calls.map(([, args]) => args).filter((args) => args[0] === "send-keys");
+    return sendKeyCalls[sendKeyCalls.length - 1];
   }
 
   it("sends short text with send-keys -l (literal) then submits with Enter", async () => {
