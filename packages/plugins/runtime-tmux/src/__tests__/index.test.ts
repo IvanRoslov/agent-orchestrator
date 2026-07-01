@@ -392,61 +392,82 @@ describe("runtime.destroy()", () => {
 });
 
 describe("runtime.sendMessage()", () => {
-  it("sends short text with send-keys -l (literal) + Enter", async () => {
+  /**
+   * Install a mock that simulates the submit flow: every command resolves, and
+   * `capture-pane` returns a different value once an `Enter` has been sent. This
+   * lets sendMessage's settle-poll see a stable pane (paste landed) and its
+   * Enter-retry loop confirm on the first Enter (pane changed after submit).
+   */
+  function installSubmitFlowMock(): void {
+    let enterSent = false;
+    mockExecFileCustom.mockImplementation((_cmd: string, args: string[]) => {
+      const isCapture = args[0] === "capture-pane";
+      if (args[0] === "send-keys" && args[args.length - 1] === "Enter") {
+        enterSent = true;
+      }
+      const stdout = isCapture ? (enterSent ? "after-submit\n" : "draft\n") : "\n";
+      return Promise.resolve({ stdout, stderr: "" });
+    });
+  }
+
+  /** Last `send-keys` arg array (the actual keys/text), for assertions. */
+  function lastSendKeys(): string[] | undefined {
+    const calls = mockExecFileCustom.mock.calls as Array<[string, string[]]>;
+    return calls.map(([, args]) => args).findLast((args) => args[0] === "send-keys");
+  }
+
+  it("sends short text with send-keys -l (literal) then submits with Enter", async () => {
     const runtime = create();
     const handle = makeHandle("msg-short");
-
-    // 1: send-keys C-u (clear), 2: send-keys -l text, 3: send-keys Enter
-    mockTmuxSuccess();
-    mockTmuxSuccess();
-    mockTmuxSuccess();
+    installSubmitFlowMock();
 
     await runtime.sendMessage(handle, "hello world");
 
-    expect(mockExecFileCustom).toHaveBeenCalledTimes(3);
-
-    // Call 0: Clear partial input
+    // First call clears partial input.
     expect(mockExecFileCustom).toHaveBeenNthCalledWith(
       1,
       "tmux",
       ["send-keys", "-t", "msg-short", "C-u"],
       expectedTmuxOptions,
     );
-
-    // Call 1: Literal text
-    expect(mockExecFileCustom).toHaveBeenNthCalledWith(
-      2,
+    // Short text goes through literal send-keys.
+    expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
       ["send-keys", "-t", "msg-short", "-l", "hello world"],
       expectedTmuxOptions,
     );
-
-    // Call 2: Enter
-    expect(mockExecFileCustom).toHaveBeenNthCalledWith(
-      3,
+    // And the message is submitted with Enter.
+    expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
       ["send-keys", "-t", "msg-short", "Enter"],
       expectedTmuxOptions,
     );
   });
 
+  it("resends Enter when the first keystroke does not submit (pane unchanged)", async () => {
+    const runtime = create();
+    const handle = makeHandle("msg-retry");
+    // Pane never changes → submit can never be confirmed → Enter is retried up
+    // to the bounded number of attempts.
+    mockExecFileCustom.mockResolvedValue({ stdout: "draft\n", stderr: "" });
+
+    await runtime.sendMessage(handle, "hello");
+
+    const enterCalls = (mockExecFileCustom.mock.calls as Array<[string, string[]]>).filter(
+      ([, args]) => args[0] === "send-keys" && args[args.length - 1] === "Enter",
+    );
+    expect(enterCalls.length).toBeGreaterThan(1);
+  });
+
   it("uses load-buffer + paste-buffer for long text (> 200 chars)", async () => {
     const runtime = create();
     const handle = makeHandle("msg-long");
     const longText = "x".repeat(250);
-
-    // 1: C-u, 2: load-buffer, 3: paste-buffer, 4: unlinkSync (sync), 5: delete-buffer, 6: Enter
-    mockTmuxSuccess(); // C-u
-    mockTmuxSuccess(); // load-buffer
-    mockTmuxSuccess(); // paste-buffer
-    mockTmuxSuccess(); // delete-buffer (finally block)
-    mockTmuxSuccess(); // Enter
+    installSubmitFlowMock();
 
     await runtime.sendMessage(handle, longText);
 
-    expect(mockExecFileCustom).toHaveBeenCalledTimes(5);
-
-    // Call 0: clear
+    // First call clears partial input.
     expect(mockExecFileCustom).toHaveBeenNthCalledWith(
       1,
       "tmux",
@@ -454,9 +475,8 @@ describe("runtime.sendMessage()", () => {
       expectedTmuxOptions,
     );
 
-    // Call 1: load-buffer with named buffer
-    expect(mockExecFileCustom).toHaveBeenNthCalledWith(
-      2,
+    // load-buffer with named buffer.
+    expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
       [
         "load-buffer",
@@ -467,22 +487,24 @@ describe("runtime.sendMessage()", () => {
       expectedTmuxOptions,
     );
 
-    // Call 2: paste-buffer
-    expect(mockExecFileCustom).toHaveBeenNthCalledWith(
-      3,
+    // paste-buffer.
+    expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
       ["paste-buffer", "-b", "ao-test-uuid-1234", "-t", "msg-long", "-d"],
       expectedTmuxOptions,
     );
 
-    // Verify writeFileSync was called with the message
+    // Submitted with Enter.
+    expect(lastSendKeys()).toEqual(["send-keys", "-t", "msg-long", "Enter"]);
+
+    // Verify writeFileSync was called with the message.
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       expect.stringContaining("ao-send-test-uuid-1234.txt"),
       longText,
       { encoding: "utf-8", mode: 0o600 },
     );
 
-    // Verify unlinkSync was called for cleanup
+    // Verify unlinkSync was called for cleanup.
     expect(fs.unlinkSync).toHaveBeenCalledWith(
       expect.stringContaining("ao-send-test-uuid-1234.txt"),
     );
@@ -491,18 +513,12 @@ describe("runtime.sendMessage()", () => {
   it("uses load-buffer for multiline text", async () => {
     const runtime = create();
     const handle = makeHandle("msg-multi");
-
-    mockTmuxSuccess(); // C-u
-    mockTmuxSuccess(); // load-buffer
-    mockTmuxSuccess(); // paste-buffer
-    mockTmuxSuccess(); // delete-buffer (finally)
-    mockTmuxSuccess(); // Enter
+    installSubmitFlowMock();
 
     await runtime.sendMessage(handle, "line1\nline2\nline3");
 
-    // Should use buffer path, not send-keys -l
-    expect(mockExecFileCustom).toHaveBeenNthCalledWith(
-      2,
+    // Should use buffer path, not send-keys -l.
+    expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
       [
         "load-buffer",
@@ -531,7 +547,7 @@ describe("runtime.sendMessage()", () => {
     // finally block:
     // unlinkSync is sync (mocked)
     mockTmuxSuccess(); // delete-buffer in finally
-    // After finally, the error propagates — no Enter call
+    // After finally, the error propagates — no submit.
 
     await expect(runtime.sendMessage(handle, longText)).rejects.toThrow("paste-buffer failed");
 

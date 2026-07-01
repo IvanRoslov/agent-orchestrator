@@ -18,6 +18,13 @@ import {
 const execFileAsync = promisify(execFile);
 const TMUX_COMMAND_TIMEOUT_MS = 5_000;
 
+// sendMessage submit tuning — wait for the pasted text to settle in the pane,
+// then submit with a bounded Enter retry if the keystroke was dropped.
+const PASTE_SETTLE_POLL_MS = 150;
+const PASTE_SETTLE_MAX_POLLS = 4; // up to ~600ms (>= the previous blind 300ms)
+const ENTER_SUBMIT_ATTEMPTS = 3;
+const ENTER_VERIFY_MS = 250;
+
 export const manifest = {
   name: "tmux",
   slot: "runtime" as const,
@@ -183,10 +190,40 @@ export function create(): Runtime {
         await tmux("send-keys", "-t", handle.id, "-l", message);
       }
 
-      // Small delay to let tmux process the pasted text before pressing Enter.
-      // Without this, Enter can arrive before the text is fully rendered.
-      await sleep(300);
-      await tmux("send-keys", "-t", handle.id, "Enter");
+      // Submit the pasted text. A blind delay + single Enter races with the
+      // agent TUI: when the pane is mid-render (large pasted briefs especially),
+      // the lone Enter arrives before the paste has settled in the composer and
+      // is dropped, leaving the message sitting as an unsent draft (the user
+      // then has to press Enter manually). Two guards fix this:
+      //   1. Wait until the pane output stops changing (bounded) so the paste
+      //      is fully in the composer before we submit.
+      //   2. Send Enter, then verify the pane changed (composer cleared /
+      //      message queued / agent started working). If it didn't, the Enter
+      //      was dropped — resend it. We never re-paste, so a confirmed-but-
+      //      undetected send can at worst add a harmless stray Enter.
+      const capture = async (): Promise<string> => {
+        try {
+          return await tmux("capture-pane", "-t", handle.id, "-p");
+        } catch {
+          return "";
+        }
+      };
+
+      let lastOutput = await capture();
+      for (let i = 0; i < PASTE_SETTLE_MAX_POLLS; i++) {
+        await sleep(PASTE_SETTLE_POLL_MS);
+        const current = await capture();
+        if (current === lastOutput) break; // pane stable — paste has landed
+        lastOutput = current;
+      }
+
+      const beforeEnter = lastOutput;
+      for (let attempt = 0; attempt < ENTER_SUBMIT_ATTEMPTS; attempt++) {
+        await tmux("send-keys", "-t", handle.id, "Enter");
+        await sleep(ENTER_VERIFY_MS);
+        const afterEnter = await capture();
+        if (afterEnter !== beforeEnter) return; // submitted / queued
+      }
     },
 
     async getOutput(handle: RuntimeHandle, lines = 50): Promise<string> {
