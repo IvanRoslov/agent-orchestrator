@@ -393,20 +393,24 @@ describe("runtime.destroy()", () => {
 
 describe("runtime.sendMessage()", () => {
   /**
-   * Install a mock that simulates the submit flow: every command resolves, and
-   * `capture-pane` returns a different value once an `Enter` has been sent. This
-   * lets sendMessage's settle-poll see a stable pane (paste landed) and its
-   * Enter-retry loop confirm on the first Enter (pane changed after submit).
+   * Install a mock that simulates the submit flow: `capture-pane` shows the
+   * message sitting on the composer input line (a draft) until an `Enter` is
+   * sent, after which the composer clears. This lets sendMessage's settle-poll
+   * see the draft land and its Enter-retry loop confirm the submit.
    */
-  function installSubmitFlowMock(): void {
+  function installSubmitFlowMock(message: string): void {
     let enterSent = false;
+    const inputLine = message.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
     mockExecFileCustom.mockImplementation((_cmd: string, args: string[]) => {
-      const isCapture = args[0] === "capture-pane";
       if (args[0] === "send-keys" && args[args.length - 1] === "Enter") {
         enterSent = true;
       }
-      const stdout = isCapture ? (enterSent ? "after-submit\n" : "draft\n") : "\n";
-      return Promise.resolve({ stdout, stderr: "" });
+      if (args[0] === "capture-pane") {
+        // Composer holds the draft until Enter is accepted, then clears.
+        const composer = enterSent ? "❯ " : `❯ ${inputLine}`;
+        return Promise.resolve({ stdout: `some transcript\n────\n${composer}\n────\n`, stderr: "" });
+      }
+      return Promise.resolve({ stdout: "\n", stderr: "" });
     });
   }
 
@@ -420,7 +424,7 @@ describe("runtime.sendMessage()", () => {
   it("sends short text with send-keys -l (literal) then submits with Enter", async () => {
     const runtime = create();
     const handle = makeHandle("msg-short");
-    installSubmitFlowMock();
+    installSubmitFlowMock("hello world");
 
     await runtime.sendMessage(handle, "hello world");
 
@@ -445,12 +449,12 @@ describe("runtime.sendMessage()", () => {
     );
   });
 
-  it("resends Enter when the first keystroke does not submit (pane unchanged)", async () => {
+  it("resends Enter when the draft stays in the composer (dropped keystroke)", async () => {
     const runtime = create();
     const handle = makeHandle("msg-retry");
-    // Pane never changes → submit can never be confirmed → Enter is retried up
-    // to the bounded number of attempts.
-    mockExecFileCustom.mockResolvedValue({ stdout: "draft\n", stderr: "" });
+    // The draft never leaves the composer → submit can never be confirmed →
+    // Enter is retried up to the bounded number of attempts.
+    mockExecFileCustom.mockResolvedValue({ stdout: "────\n❯ hello\n────\n", stderr: "" });
 
     await runtime.sendMessage(handle, "hello");
 
@@ -464,7 +468,7 @@ describe("runtime.sendMessage()", () => {
     const runtime = create();
     const handle = makeHandle("msg-long");
     const longText = "x".repeat(250);
-    installSubmitFlowMock();
+    installSubmitFlowMock(longText);
 
     await runtime.sendMessage(handle, longText);
 
@@ -514,7 +518,7 @@ describe("runtime.sendMessage()", () => {
   it("uses load-buffer for multiline text", async () => {
     const runtime = create();
     const handle = makeHandle("msg-multi");
-    installSubmitFlowMock();
+    installSubmitFlowMock("line1\nline2\nline3");
 
     await runtime.sendMessage(handle, "line1\nline2\nline3");
 

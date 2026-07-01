@@ -18,12 +18,14 @@ import {
 const execFileAsync = promisify(execFile);
 const TMUX_COMMAND_TIMEOUT_MS = 5_000;
 
-// sendMessage submit tuning — wait for the pasted text to settle in the pane,
-// then submit with a bounded Enter retry if the keystroke was dropped.
-const PASTE_SETTLE_POLL_MS = 150;
-const PASTE_SETTLE_MAX_POLLS = 4; // up to ~600ms (>= the previous blind 300ms)
-const ENTER_SUBMIT_ATTEMPTS = 3;
-const ENTER_VERIFY_MS = 250;
+// sendMessage submit tuning — wait for the pasted text to land in the composer,
+// then submit with a bounded Enter retry until the draft leaves the composer.
+const PASTE_SETTLE_POLL_MS = 120;
+const PASTE_SETTLE_MAX_POLLS = 8; // up to ~1s to see the paste render
+const ENTER_SUBMIT_ATTEMPTS = 8; // retry Enter across a dropped-keystroke window
+const ENTER_VERIFY_MS = 400;
+const COMPOSER_TAIL_LINES = 8; // bottom-of-pane region where the input line lives
+const INPUT_NEEDLE_LEN = 40; // chars of the message tail we track on the input line
 
 export const manifest = {
   name: "tmux",
@@ -190,17 +192,21 @@ export function create(): Runtime {
         await tmux("send-keys", "-t", handle.id, "-l", message);
       }
 
-      // Submit the pasted text. A blind delay + single Enter races with the
-      // agent TUI: when the pane is mid-render (large pasted briefs especially),
-      // the lone Enter arrives before the paste has settled in the composer and
-      // is dropped, leaving the message sitting as an unsent draft (the user
-      // then has to press Enter manually). Two guards fix this:
-      //   1. Wait until the pane output stops changing (bounded) so the paste
-      //      is fully in the composer before we submit.
-      //   2. Send Enter, then verify the pane changed (composer cleared /
-      //      message queued / agent started working). If it didn't, the Enter
-      //      was dropped — resend it. We never re-paste, so a confirmed-but-
-      //      undetected send can at worst add a harmless stray Enter.
+      // Submit the pasted text. A single Enter after a fixed delay races with
+      // the agent TUI: while the pane is mid-render the keystroke arrives before
+      // the composer is ready and is silently dropped, leaving the message as an
+      // unsent draft the user must submit by hand. The race is timing-sensitive
+      // (only reproduces on slower machines / under render load), so a bigger
+      // fixed delay just moves the goalposts — instead we detect the outcome and
+      // retry adaptively.
+      //
+      // Signal: while the message is an unsent draft it sits on the composer's
+      // input line at the bottom of the pane. Once Enter is accepted (submitted
+      // or queued) the composer clears, so the draft text leaves the bottom of
+      // the pane. We watch a distinctive tail of the message there, NOT the
+      // whole pane (spinners / token counters churn it constantly). We only ever
+      // resend Enter — never re-paste — so at worst an undetected submit adds a
+      // harmless stray Enter on an empty composer.
       const capture = async (): Promise<string> => {
         try {
           return await tmux("capture-pane", "-t", handle.id, "-p");
@@ -209,20 +215,33 @@ export function create(): Runtime {
         }
       };
 
-      let lastOutput = await capture();
+      // The tail of the last non-empty line is what renders on the input line.
+      const lastLine = message
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .at(-1);
+      const needle = (lastLine ?? "").slice(-INPUT_NEEDLE_LEN).trim();
+      const draftPresent = (pane: string): boolean => {
+        if (!needle) return false; // nothing distinctive to track — can't detect
+        const tail = pane.split("\n").slice(-COMPOSER_TAIL_LINES).join("\n");
+        return tail.includes(needle);
+      };
+
+      // Wait until the paste has actually landed in the composer before we
+      // submit (bounded). Watching for the draft to appear beats a blind delay.
       for (let i = 0; i < PASTE_SETTLE_MAX_POLLS; i++) {
+        if (draftPresent(await capture())) break;
         await sleep(PASTE_SETTLE_POLL_MS);
-        const current = await capture();
-        if (current === lastOutput) break; // pane stable — paste has landed
-        lastOutput = current;
       }
 
-      const beforeEnter = lastOutput;
+      // Submit, retrying Enter until the draft leaves the composer. If we have
+      // no needle to track, fall back to a single Enter (legacy behavior).
       for (let attempt = 0; attempt < ENTER_SUBMIT_ATTEMPTS; attempt++) {
         await tmux("send-keys", "-t", handle.id, "Enter");
+        if (!needle) return;
         await sleep(ENTER_VERIFY_MS);
-        const afterEnter = await capture();
-        if (afterEnter !== beforeEnter) return; // submitted / queued
+        if (!draftPresent(await capture())) return; // composer cleared → submitted
       }
     },
 
