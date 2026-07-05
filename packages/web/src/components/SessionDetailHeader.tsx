@@ -49,6 +49,8 @@ interface SessionDetailHeaderProps {
   onToggleInputDock?: () => void;
   transcriptVisible?: boolean;
   onToggleTranscript?: () => void;
+  workersCollapsed?: boolean;
+  onToggleWorkers?: () => void;
 }
 
 export function SessionDetailHeader({
@@ -71,6 +73,8 @@ export function SessionDetailHeader({
   onToggleInputDock,
   transcriptVisible = false,
   onToggleTranscript,
+  workersCollapsed = false,
+  onToggleWorkers,
 }: SessionDetailHeaderProps) {
   const prs = session.prs ?? [];
   const safeSelectedPRIndex = Math.min(selectedPRIndex, Math.max(0, prs.length - 1));
@@ -223,6 +227,29 @@ export function SessionDetailHeader({
       <div className="dashboard-app-header__spacer" />
       <div className="dashboard-app-header__actions">
         <DashboardNotificationButton />
+        {isFeatureOrchestrator && onToggleWorkers && !isMobile && !terminalEnded ? (
+          <button
+            type="button"
+            className={cn("dashboard-app-btn", !workersCollapsed && "topbar-pr-btn--open")}
+            onClick={onToggleWorkers}
+            aria-pressed={!workersCollapsed}
+            aria-label="Toggle workers panel"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+            </svg>
+            <span className="topbar-btn-label">Workers</span>
+          </button>
+        ) : null}
         {!isOrchestrator && pr ? (
           <div className="topbar-pr-btn-wrap" ref={prPopoverRef}>
             <a

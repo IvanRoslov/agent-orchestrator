@@ -55,6 +55,7 @@ export interface WorkerHealth {
   ageMs: number;
   stale: boolean;
   pr: DashboardPR | null;
+  lastActivityAt: string;
 }
 
 /** Compact age label: "15s", "47m", "2h 5m". */
@@ -88,6 +89,7 @@ function toWorkerHealth(
     ageMs,
     stale: session.activity !== null && ageMs > staleMs,
     pr: session.pr,
+    lastActivityAt: session.lastActivityAt,
   };
 }
 
@@ -101,4 +103,20 @@ export function workerHealthList(
   return workersForFeature(sessions, slug)
     .map((s) => toWorkerHealth(s, slug, nowMs, staleMs))
     .sort((a, b) => Number(b.stale) - Number(a.stale) || b.ageMs - a.ageMs);
+}
+
+/** Which right rail (if any) a session detail view should show. */
+export function railKind(
+  session: { metadata?: Record<string, string> | null },
+  opts: {
+    isMobile: boolean;
+    terminalEnded: boolean;
+    isOrchestrator: boolean;
+    workersCollapsed: boolean;
+  },
+): "orchestrator" | "inspector" | "none" {
+  if (opts.isMobile || opts.terminalEnded) return "none";
+  if (isFeatureCoordinator(session)) return opts.workersCollapsed ? "none" : "orchestrator";
+  if (!opts.isOrchestrator) return "inspector";
+  return "none";
 }

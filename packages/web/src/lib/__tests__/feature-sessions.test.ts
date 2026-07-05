@@ -7,6 +7,7 @@ import {
   workersForFeature,
   workerHealthList,
   formatAgeShort,
+  railKind,
 } from "../feature-sessions";
 
 function session(
@@ -134,6 +135,12 @@ describe("workerHealthList", () => {
     expect(list.find((w) => w.id === "nodata")!.stale).toBe(false); // null activity never stale
     expect(list.find((w) => w.id === "fresh")!.stale).toBe(false);
   });
+
+  it("carries the raw lastActivityAt ISO string through to WorkerHealth", () => {
+    const iso = new Date(NOW - 60_000).toISOString();
+    const all = [s({ id: "w", branch: "feature/login/web", lastActivityAt: iso })];
+    expect(workerHealthList(all, "login", NOW)[0].lastActivityAt).toBe(iso);
+  });
 });
 
 describe("formatAgeShort", () => {
@@ -141,5 +148,28 @@ describe("formatAgeShort", () => {
     expect(formatAgeShort(15_000)).toBe("15s");
     expect(formatAgeShort(47 * 60_000)).toBe("47m");
     expect(formatAgeShort(2 * 3_600_000 + 5 * 60_000)).toBe("2h 5m");
+  });
+});
+
+describe("railKind", () => {
+  const coord = { metadata: { feature: "login" } } as unknown as DashboardSession;
+  const worker = { metadata: {} } as unknown as DashboardSession;
+  const base = { isMobile: false, terminalEnded: false, isOrchestrator: true, workersCollapsed: false };
+
+  it("orchestrator rail for a feature coordinator when open", () => {
+    expect(railKind(coord, base)).toBe("orchestrator");
+  });
+  it("none for a feature coordinator when collapsed", () => {
+    expect(railKind(coord, { ...base, workersCollapsed: true })).toBe("none");
+  });
+  it("worker inspector for a non-orchestrator worker", () => {
+    expect(railKind(worker, { ...base, isOrchestrator: false })).toBe("inspector");
+  });
+  it("none for a plain (non-feature) orchestrator", () => {
+    expect(railKind(worker, base)).toBe("none");
+  });
+  it("none on mobile or when terminal ended", () => {
+    expect(railKind(coord, { ...base, isMobile: true })).toBe("none");
+    expect(railKind(coord, { ...base, terminalEnded: true })).toBe("none");
   });
 });

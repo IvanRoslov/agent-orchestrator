@@ -13,7 +13,7 @@ import { getSessionTitle } from "@/lib/format";
 import type { ProjectInfo } from "@/lib/project-name";
 import { useSidebarContext } from "./workspace/SidebarContext";
 import { projectDashboardPath, projectSessionPath } from "@/lib/routes";
-import { isFeatureCoordinator } from "@/lib/feature-sessions";
+import { isFeatureCoordinator, railKind } from "@/lib/feature-sessions";
 
 import { MobileBottomNav } from "./MobileBottomNav";
 import { MobileTerminalInputDock } from "./MobileTerminalInputDock";
@@ -21,6 +21,7 @@ import { SessionDetailHeader, type OrchestratorZones } from "./SessionDetailHead
 import { SessionTranscriptView } from "./SessionTranscriptView";
 import { SessionEndedSummary } from "./SessionEndedSummary";
 import { SessionInspector } from "./SessionInspector";
+import { OrchestratorInspector } from "./OrchestratorInspector";
 
 export type { OrchestratorZones } from "./SessionDetailHeader";
 
@@ -83,6 +84,23 @@ export function SessionDetail({
       return next;
     });
   }, [isTouch]);
+  const [workersCollapsed, setWorkersCollapsed] = useState<boolean>(false);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("ao-workers-rail-collapsed");
+      if (stored === "1") setWorkersCollapsed(true);
+    } catch {
+      /* localStorage unavailable */
+    }
+  }, []);
+  const setWorkersCollapsedPersisted = useCallback((next: boolean) => {
+    setWorkersCollapsed(next);
+    try {
+      window.localStorage.setItem("ao-workers-rail-collapsed", next ? "1" : "0");
+    } catch {
+      /* localStorage unavailable */
+    }
+  }, []);
   const sidebarCtx = useSidebarContext();
   const startFullscreen = searchParams.get("fullscreen") === "true";
   const [showTerminal, setShowTerminal] = useState(false);
@@ -178,6 +196,8 @@ export function SessionDetail({
         onToggleInputDock={toggleInputDock}
         transcriptVisible={transcriptVisible}
         onToggleTranscript={toggleTranscript}
+        workersCollapsed={workersCollapsed}
+        onToggleWorkers={() => setWorkersCollapsedPersisted(!workersCollapsed)}
       />
       <main className="session-detail-page session-workspace flex-1 min-h-0 flex bg-[var(--color-bg-base)]">
         <div className="session-workspace__main flex-1 min-h-0 flex flex-col">
@@ -212,11 +232,23 @@ export function SessionDetail({
             <MobileTerminalInputDock sessionId={session.id} projectId={session.projectId} />
           ) : null}
         </div>
-        {/* The orchestrator session has no PR/changes/browser to inspect — give
-            it the full-width terminal (no inspector rail). */}
-        {!isMobile && !terminalEnded && !isOrchestrator ? (
-          <SessionInspector session={session} />
-        ) : null}
+        {(() => {
+          const kind = railKind(session, {
+            isMobile,
+            terminalEnded,
+            isOrchestrator,
+            workersCollapsed,
+          });
+          if (kind === "orchestrator")
+            return (
+              <OrchestratorInspector
+                session={session}
+                onCollapse={() => setWorkersCollapsedPersisted(true)}
+              />
+            );
+          if (kind === "inspector") return <SessionInspector session={session} />;
+          return null;
+        })()}
       </main>
       <MobileBottomNav
         ariaLabel="Session navigation"

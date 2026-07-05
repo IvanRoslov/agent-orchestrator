@@ -8,8 +8,6 @@ import { StatusBadge } from "./StatusBadge";
 import { SessionDetailPRCard } from "./SessionDetailPRCard";
 import { askAgentToFix } from "./session-detail-agent-actions";
 import { formatTimeCompact } from "./session-detail-utils";
-import { isFeatureCoordinator } from "@/lib/feature-sessions";
-import { OrchestratorWorkersCard } from "./OrchestratorWorkersCard";
 
 type InspectorView = "summary" | "changes" | "browser";
 
@@ -164,12 +162,6 @@ function SummaryView({ session }: { session: DashboardSession }) {
           <p className="inspector-empty">No pull request opened yet.</p>
         )}
       </Section>
-
-      {isFeatureCoordinator(session) ? (
-        <Section title="Workers">
-          <OrchestratorWorkersCard session={session} />
-        </Section>
-      ) : null}
 
       <Section title="Activity">
         <ActivityTimeline session={session} />
