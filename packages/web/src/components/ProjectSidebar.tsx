@@ -11,7 +11,7 @@ import { getSessionTitle, humanizeBranch } from "@/lib/format";
 import { usePopoverClamp } from "@/hooks/usePopoverClamp";
 import { useResizable } from "@/hooks/useResizable";
 import { projectDashboardPath, projectSessionPath } from "@/lib/routes";
-import { featureLabel, isFeatureCoordinator } from "@/lib/feature-sessions";
+import { featureLabel, isFeatureCoordinator, workerHealthList } from "@/lib/feature-sessions";
 import { ThemeToggle } from "./ThemeToggle";
 import { AppMark } from "./AppMark";
 import { AddProjectModal } from "./AddProjectModal";
@@ -1079,6 +1079,9 @@ function ProjectSidebarInner({
                   </div>
                   {featureSessions.map((session) => {
                     const slug = featureLabel(session);
+                    const featureSlug = session.metadata["feature"] ?? "";
+                    const workers = workerHealthList(sessions, featureSlug, Date.now());
+                    const stalledCount = workers.filter((w) => w.stale).length;
                     const level = getAttentionLevel(session);
                     const isSessionActive = activeSessionId === session.id;
                     const href = projectSessionPath(session.projectId, session.id);
@@ -1112,6 +1115,14 @@ function ProjectSidebarInner({
                             >
                               {slug}
                             </span>
+                            {workers.length > 0 ? (
+                              <span className="text-[10px] text-[var(--color-text-muted)]">
+                                {workers.length}w
+                                {stalledCount > 0 ? (
+                                  <span className="text-[var(--color-status-attention)]"> · {stalledCount} stalled</span>
+                                ) : null}
+                              </span>
+                            ) : null}
                           </div>
                         </a>
                       </div>

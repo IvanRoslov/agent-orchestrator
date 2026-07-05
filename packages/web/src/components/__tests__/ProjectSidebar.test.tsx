@@ -521,6 +521,39 @@ describe("ProjectSidebar", () => {
     });
   });
 
+  it("counts the feature worker badge by the metadata slug, not the display label", () => {
+    // Regression: the badge must match worker branches against
+    // session.metadata["feature"] (the real slug used in branch names like
+    // "feature/<slug>/..."), never against featureLabel(session) (the
+    // humanized display name). Here the display name ("Login Flow") differs
+    // from the slug ("login") on purpose: if the badge ever switched to
+    // matching on the label, no branch would start with "feature/Login Flow/"
+    // and this test would fail.
+    render(
+      <ProjectSidebar
+        projects={projects}
+        sessions={[
+          makeSession({
+            id: "feature-orch-1",
+            projectId: "project-1",
+            displayName: "Login Flow",
+            metadata: { feature: "login" },
+          }),
+          makeSession({
+            id: "worker-1",
+            projectId: "project-2",
+            branch: "feature/login/web-form",
+          }),
+        ]}
+        activeProjectId="project-1"
+        activeSessionId={undefined}
+      />,
+    );
+
+    expect(screen.getByText("Login Flow")).toBeInTheDocument();
+    expect(screen.getByText("1w")).toBeInTheDocument();
+  });
+
   it("renders the collapsed rail when collapsed", () => {
     const { container } = render(
       <ProjectSidebar

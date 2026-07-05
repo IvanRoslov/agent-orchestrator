@@ -52,6 +52,7 @@ import { exec, execSilent, git } from "../lib/shell.js";
 import { getSessionManager } from "../lib/create-session-manager.js";
 import { listLifecycleWorkers } from "../lib/lifecycle-service.js";
 import { startBunTmpJanitor } from "../lib/bun-tmp-janitor.js";
+import { startFeatureHeartbeat } from "../lib/feature-heartbeat.js";
 import {
   findWebDir,
   buildDashboardEnv,
@@ -1843,6 +1844,15 @@ export function registerStart(program: Command): void {
                 console.warn(`[bun-tmp-janitor] sweep had ${errors} error(s)`);
               }
             },
+          });
+
+          // Wake stalled feature orchestrators: push a worker-status summary when a
+          // worker has had no movement for >15 min. Runs for the life of `ao start`.
+          const heartbeatSm = await getSessionManager(config);
+          startFeatureHeartbeat({
+            list: () => heartbeatSm.list(),
+            send: (id, msg) => heartbeatSm.send(id, msg),
+            onError: (err) => console.warn("[feature-heartbeat] tick failed:", err),
           });
 
           // Ctrl+C and `ao stop` (which sends SIGTERM) perform a full

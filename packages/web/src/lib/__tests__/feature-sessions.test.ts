@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DashboardSession } from "../types";
-import { featureLabel, isFeatureCoordinator, listFeatureSessions } from "../feature-sessions";
+import {
+  featureLabel,
+  isFeatureCoordinator,
+  listFeatureSessions,
+  workersForFeature,
+  workerHealthList,
+  formatAgeShort,
+} from "../feature-sessions";
 
 function session(
   id: string,
@@ -61,5 +68,78 @@ describe("listFeatureSessions", () => {
 
   it("handles null", () => {
     expect(listFeatureSessions(null)).toEqual([]);
+  });
+});
+
+const NOW = 1_000_000_000_000;
+const STALE = 15 * 60_000;
+
+function s(over: Partial<DashboardSession>): DashboardSession {
+  return {
+    id: "x",
+    projectId: "p",
+    status: "working",
+    activity: "idle",
+    branch: null,
+    displayName: null,
+    displayNameUserSet: false,
+    lastActivityAt: new Date(NOW).toISOString(),
+    pr: null,
+    prs: [],
+    metadata: {},
+    ...over,
+  } as unknown as DashboardSession;
+}
+
+describe("workersForFeature", () => {
+  it("filters by feature/<slug>/ branch prefix; tolerates null", () => {
+    const all = [
+      s({ id: "a", branch: "feature/login/web" }),
+      s({ id: "b", branch: "feature/login/api" }),
+      s({ id: "c", branch: "feature/signup/web" }),
+      s({ id: "d", branch: null }),
+    ];
+    expect(workersForFeature(all, "login").map((x) => x.id)).toEqual(["a", "b"]);
+    expect(workersForFeature(null, "login")).toEqual([]);
+    expect(workersForFeature(all, "")).toEqual([]);
+  });
+});
+
+describe("workerHealthList", () => {
+  it("computes task suffix, age, staleness; sorts stale-first then oldest", () => {
+    const all = [
+      s({
+        id: "fresh",
+        branch: "feature/login/api",
+        activity: "active",
+        lastActivityAt: new Date(NOW - 1000).toISOString(),
+      }),
+      s({
+        id: "old",
+        branch: "feature/login/web",
+        activity: "idle",
+        lastActivityAt: new Date(NOW - STALE - 60_000).toISOString(),
+      }),
+      s({
+        id: "nodata",
+        branch: "feature/login/x",
+        activity: null,
+        lastActivityAt: new Date(0).toISOString(),
+      }),
+    ];
+    const list = workerHealthList(all, "login", NOW);
+    expect(list[0].id).toBe("old");
+    expect(list[0].stale).toBe(true);
+    expect(list[0].task).toBe("web");
+    expect(list.find((w) => w.id === "nodata")!.stale).toBe(false); // null activity never stale
+    expect(list.find((w) => w.id === "fresh")!.stale).toBe(false);
+  });
+});
+
+describe("formatAgeShort", () => {
+  it("formats seconds/minutes/hours", () => {
+    expect(formatAgeShort(15_000)).toBe("15s");
+    expect(formatAgeShort(47 * 60_000)).toBe("47m");
+    expect(formatAgeShort(2 * 3_600_000 + 5 * 60_000)).toBe("2h 5m");
   });
 });
