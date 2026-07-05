@@ -1,7 +1,15 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { formatAgeShort, type WorkerHealth } from "../lib/feature-sessions";
+import type { DashboardSession } from "../lib/types";
+import { projectSessionPath } from "../lib/routes";
+import {
+  workerHealthList,
+  formatAgeShort,
+  type WorkerHealth,
+} from "../lib/feature-sessions";
 
 const STATE_LABEL: Record<string, string> = {
   active: "active",
@@ -11,6 +19,8 @@ const STATE_LABEL: Record<string, string> = {
   blocked: "blocked",
   exited: "exited",
 };
+
+const POLL_MS = 5000;
 
 export function OrchestratorWorkersList({
   workers,
@@ -55,13 +65,53 @@ export function OrchestratorWorkersList({
   );
 }
 
-// NOTE: OrchestratorWorkersCard (the smart container) is intentionally NOT
-// implemented here yet. See task-3-report.md — the brief's exact code calls
-// `useSessionEvents()` with zero arguments, but the real hook signature
-// (packages/web/src/hooks/useSessionEvents.ts) requires `initialSessions`
-// and `attentionZones` as mandatory options, and there is no existing
-// context/shortcut in this codebase that supplies them ambiently to a leaf
-// component. This needs an architecture decision (prop-threading through
-// SessionDetail -> SessionInspector -> SummaryView, plus a new Context for
-// the per-project route) that is out of scope to guess at here. Reported
-// BLOCKED per task instructions.
+/**
+ * Self-contained cross-project session feed. Workers live in the LINKED
+ * projects, not this orchestrator's project, so we poll the unscoped
+ * `/api/sessions` endpoint directly rather than depending on the SSR-seeded
+ * `useSessionEvents` hook (which is not callable standalone deep in the tree).
+ */
+function useAllSessions(): DashboardSession[] {
+  const [sessions, setSessions] = useState<DashboardSession[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    let inflight: AbortController | null = null;
+    const load = async () => {
+      inflight?.abort();
+      const controller = new AbortController();
+      inflight = controller;
+      try {
+        const res = await fetch("/api/sessions?fresh=true", { signal: controller.signal });
+        if (!res.ok) return;
+        const body = (await res.json()) as { sessions?: DashboardSession[] };
+        if (!cancelled) setSessions(body.sessions ?? []);
+      } catch {
+        /* transient fetch/abort — keep last good data */
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), POLL_MS);
+    return () => {
+      cancelled = true;
+      inflight?.abort();
+      clearInterval(timer);
+    };
+  }, []);
+  return sessions;
+}
+
+export function OrchestratorWorkersCard({ session }: { session: DashboardSession }) {
+  const slug = session.metadata["feature"] ?? "";
+  const sessions = useAllSessions();
+  const router = useRouter();
+  const workers = useMemo(
+    () => workerHealthList(sessions, slug, Date.now()),
+    [sessions, slug],
+  );
+  return (
+    <OrchestratorWorkersList
+      workers={workers}
+      onOpen={(projectId, id) => router.push(projectSessionPath(projectId, id))}
+    />
+  );
+}

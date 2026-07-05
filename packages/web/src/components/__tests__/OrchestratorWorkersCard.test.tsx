@@ -1,7 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { OrchestratorWorkersList } from "../OrchestratorWorkersCard";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { OrchestratorWorkersList, OrchestratorWorkersCard } from "../OrchestratorWorkersCard";
 import type { WorkerHealth } from "../../lib/feature-sessions";
+import type { DashboardSession } from "../../lib/types";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const w = (over: Partial<WorkerHealth>): WorkerHealth => ({
   id: "web-1", projectId: "web", task: "web-form", branch: "feature/login/web-form",
@@ -33,5 +36,26 @@ describe("OrchestratorWorkersList", () => {
     render(<OrchestratorWorkersList workers={[w({})]} onOpen={onOpen} />);
     fireEvent.click(screen.getByRole("button"));
     expect(onOpen).toHaveBeenCalledWith("web", "web-1");
+  });
+});
+
+const ds = (over: Partial<DashboardSession>): DashboardSession =>
+  ({
+    id: "x", projectId: "p", status: "working", activity: "idle",
+    branch: null, displayName: null, displayNameUserSet: false,
+    lastActivityAt: new Date().toISOString(), pr: null, prs: [], metadata: {},
+    ...over,
+  }) as unknown as DashboardSession;
+
+describe("OrchestratorWorkersCard", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("fetches /api/sessions and renders a worker row for the feature", async () => {
+    const worker = ds({ id: "web-1", projectId: "web", branch: "feature/login/web-form" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ sessions: [worker] }) }),
+    );
+    render(<OrchestratorWorkersCard session={ds({ id: "hub-1", metadata: { feature: "login" } })} />);
+    await waitFor(() => expect(screen.getByText("web-form")).toBeInTheDocument());
   });
 });
