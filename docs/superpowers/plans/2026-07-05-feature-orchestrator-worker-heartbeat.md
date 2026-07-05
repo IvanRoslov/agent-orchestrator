@@ -584,7 +584,7 @@ git commit -m "feat(web): worker-health helpers for feature orchestrators"
 - Modify: `packages/web/src/components/SessionInspector.tsx` (mount in `SummaryView`)
 
 **Interfaces:**
-- Consumes: `workerHealthList`, `formatAgeShort`, `type WorkerHealth` from `../lib/feature-sessions`; `isFeatureCoordinator` (already in that module); `type DashboardSession` from `../lib/types`; `useSessionEvents` from `../hooks/useSessionEvents`; `projectSessionPath` from `../lib/routes`; `cn` from `@/lib/cn`; `useRouter` from `next/navigation`.
+- Consumes: `workerHealthList`, `formatAgeShort`, `type WorkerHealth` from `../lib/feature-sessions`; `isFeatureCoordinator` (already in that module); `type DashboardSession` from `../lib/types`; `projectSessionPath` from `../lib/routes`; `cn` from `@/lib/cn`; `useRouter` from `next/navigation`. Cross-project worker data comes from a self-contained fetch+poll of `GET /api/sessions?fresh=true` (returns `{ sessions: DashboardSession[] }` unscoped, deliberately including workers and feature orchestrators) — NOT `useSessionEvents` (which requires SSR `initialSessions`/`attentionZones` props and is not callable standalone deep in the tree).
 - Produces: `OrchestratorWorkersList` (pure, testable) and `OrchestratorWorkersCard` (smart container).
 
 - [ ] **Step 1: Write failing test for the presentational list**
@@ -643,11 +643,10 @@ Create `packages/web/src/components/OrchestratorWorkersCard.tsx`:
 ```tsx
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import type { DashboardSession } from "../lib/types";
-import { useSessionEvents } from "../hooks/useSessionEvents";
 import { projectSessionPath } from "../lib/routes";
 import {
   workerHealthList,
@@ -663,6 +662,8 @@ const STATE_LABEL: Record<string, string> = {
   blocked: "blocked",
   exited: "exited",
 };
+
+const POLL_MS = 5000;
 
 export function OrchestratorWorkersList({
   workers,
@@ -689,8 +690,14 @@ export function OrchestratorWorkersList({
             )}
           >
             <span className="truncate text-sm font-medium">{w.task}</span>
+            {/* three sibling spans (not one) so Testing Library's exact-match
+                getByText("47m") resolves to a single element's own text. */}
             <span className="text-xs text-[var(--color-text-muted)]">
-              {STATE_LABEL[w.activity ?? ""] ?? "unknown"} · {formatAgeShort(w.ageMs)}
+              {STATE_LABEL[w.activity ?? ""] ?? "unknown"}
+            </span>
+            <span className="text-xs text-[var(--color-text-muted)]"> · </span>
+            <span className="text-xs text-[var(--color-text-muted)]">
+              {formatAgeShort(w.ageMs)}
             </span>
             {w.pr ? <span className="ml-auto text-xs">#{w.pr.number}</span> : null}
             {w.stale ? (
@@ -703,10 +710,44 @@ export function OrchestratorWorkersList({
   );
 }
 
+/**
+ * Self-contained cross-project session feed. Workers live in the LINKED
+ * projects, not this orchestrator's project, so we poll the unscoped
+ * `/api/sessions` endpoint directly rather than depending on the SSR-seeded
+ * `useSessionEvents` hook (which is not callable standalone deep in the tree).
+ */
+function useAllSessions(): DashboardSession[] {
+  const [sessions, setSessions] = useState<DashboardSession[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    let inflight: AbortController | null = null;
+    const load = async () => {
+      inflight?.abort();
+      const controller = new AbortController();
+      inflight = controller;
+      try {
+        const res = await fetch("/api/sessions?fresh=true", { signal: controller.signal });
+        if (!res.ok) return;
+        const body = (await res.json()) as { sessions?: DashboardSession[] };
+        if (!cancelled) setSessions(body.sessions ?? []);
+      } catch {
+        /* transient fetch/abort — keep last good data */
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), POLL_MS);
+    return () => {
+      cancelled = true;
+      inflight?.abort();
+      clearInterval(timer);
+    };
+  }, []);
+  return sessions;
+}
+
 export function OrchestratorWorkersCard({ session }: { session: DashboardSession }) {
   const slug = session.metadata["feature"] ?? "";
-  // Unscoped feed: workers live in the linked projects, not this one.
-  const { sessions } = useSessionEvents();
+  const sessions = useAllSessions();
   const router = useRouter();
   const workers = useMemo(
     () => workerHealthList(sessions, slug, Date.now()),
@@ -719,6 +760,38 @@ export function OrchestratorWorkersCard({ session }: { session: DashboardSession
     />
   );
 }
+```
+
+Also add a container test to the test file (mock `fetch` and `next/navigation`), appended to the `describe` blocks from Step 1:
+
+```tsx
+import { vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { OrchestratorWorkersCard } from "../OrchestratorWorkersCard";
+import type { DashboardSession } from "../../lib/types";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
+const ds = (over: Partial<DashboardSession>): DashboardSession =>
+  ({
+    id: "x", projectId: "p", status: "working", activity: "idle",
+    branch: null, displayName: null, displayNameUserSet: false,
+    lastActivityAt: new Date().toISOString(), pr: null, prs: [], metadata: {},
+    ...over,
+  }) as unknown as DashboardSession;
+
+describe("OrchestratorWorkersCard", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("fetches /api/sessions and renders a worker row for the feature", async () => {
+    const worker = ds({ id: "web-1", projectId: "web", branch: "feature/login/web-form" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ sessions: [worker] }) }),
+    );
+    render(<OrchestratorWorkersCard session={ds({ id: "hub-1", metadata: { feature: "login" } })} />);
+    await waitFor(() => expect(screen.getByText("web-form")).toBeInTheDocument());
+  });
+});
 ```
 
 - [ ] **Step 4: Run test to confirm it passes**
