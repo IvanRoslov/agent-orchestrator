@@ -21,6 +21,7 @@ import {
 } from "@aoagents/ao-core";
 import { stopBunTmpJanitor } from "./bun-tmp-janitor.js";
 import { getSessionManager } from "./create-session-manager.js";
+import { stopFeatureHeartbeat } from "./feature-heartbeat.js";
 import { stopAllLifecycleWorkers } from "./lifecycle-service.js";
 import { stopProjectSupervisor } from "./project-supervisor.js";
 import { unregister, writeLastStop } from "./running-state.js";
@@ -185,6 +186,11 @@ export function installShutdownHandlers(ctx: ShutdownContext): void {
         await stopBunTmpJanitor();
       } catch {
         // Best-effort cleanup.
+      }
+      try {
+        await stopFeatureHeartbeat();
+      } catch {
+        /* best-effort cleanup */
       }
       process.exit(exitCode);
     })();
