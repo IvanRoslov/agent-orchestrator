@@ -1,26 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { DashboardSession } from "../lib/types";
-import { projectSessionPath } from "../lib/routes";
-import {
-  workerHealthList,
-  formatAgeShort,
-  type WorkerHealth,
-} from "../lib/feature-sessions";
-
-const STATE_LABEL: Record<string, string> = {
-  active: "active",
-  ready: "ready",
-  idle: "idle",
-  waiting_input: "waiting",
-  blocked: "blocked",
-  exited: "exited",
-};
+import { getPRChipColorClass, getPRStatusLabel } from "@/lib/pr-display";
+import { formatRelativeTime } from "@/lib/format";
+import { workerHealthList, type WorkerHealth } from "../lib/feature-sessions";
 
 const POLL_MS = 5000;
+
+/** activity → { colored dot class, human label }. Stale is an ADDITIVE marker
+    (amber border + "stalled" pill), so status stays visible even when stale. */
+function statusDisplay(activity: WorkerHealth["activity"]): { dot: string; label: string } {
+  switch (activity) {
+    case "active": return { dot: "bg-[var(--color-status-working)]", label: "active" };
+    case "ready": return { dot: "bg-[var(--color-status-ready)]", label: "ready" };
+    case "waiting_input": return { dot: "bg-[var(--color-status-respond)]", label: "waiting input" };
+    case "blocked": return { dot: "bg-[var(--color-status-error)]", label: "blocked" };
+    case "idle": return { dot: "bg-[var(--color-status-idle)]", label: "idle" };
+    case "exited": return { dot: "bg-[var(--color-text-muted)]", label: "exited" };
+    default: return { dot: "bg-[var(--color-text-tertiary)] opacity-40", label: "unknown" };
+  }
+}
 
 export function OrchestratorWorkersList({
   workers,
@@ -33,45 +34,73 @@ export function OrchestratorWorkersList({
     return <p className="inspector-empty">No workers spawned yet.</p>;
   }
   return (
-    <ul className="flex flex-col gap-[6px]">
-      {workers.map((w) => (
-        <li key={w.id}>
-          <button
-            type="button"
-            onClick={() => onOpen(w.projectId, w.id)}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left",
-              w.stale
-                ? "border-[var(--color-accent-amber)]"
-                : "border-[var(--color-border-default)]",
-            )}
-          >
-            <span className="truncate text-sm font-medium">{w.task}</span>
-            <span className="text-xs text-[var(--color-text-muted)]">
-              {STATE_LABEL[w.activity ?? ""] ?? "unknown"}
-            </span>
-            <span className="text-xs text-[var(--color-text-muted)]"> · </span>
-            <span className="text-xs text-[var(--color-text-muted)]">
-              {formatAgeShort(w.ageMs)}
-            </span>
-            {w.pr ? <span className="ml-auto text-xs">#{w.pr.number}</span> : null}
-            {w.stale ? (
-              <span className="text-xs text-[var(--color-status-attention)]">stalled</span>
-            ) : null}
-          </button>
-        </li>
-      ))}
+    <ul className="flex flex-col gap-[8px]">
+      {workers.map((w) => {
+        const s = statusDisplay(w.activity);
+        const lastMs = new Date(w.lastActivityAt).getTime();
+        const exact = Number.isNaN(lastMs) ? "" : new Date(lastMs).toLocaleString();
+        return (
+          <li key={w.id}>
+            <button
+              type="button"
+              onClick={() => onOpen(w.projectId, w.id)}
+              className={cn(
+                "flex w-full flex-col gap-1 rounded-md border px-2.5 py-2 text-left",
+                w.stale
+                  ? "border-[var(--color-accent-amber)]"
+                  : "border-[var(--color-border-default)]",
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span className={cn("h-2 w-2 shrink-0 rounded-full", s.dot)} />
+                <span className="truncate text-sm font-medium">{w.task}</span>
+                {w.pr ? (
+                  <span
+                    className={cn(
+                      "ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold leading-none",
+                      getPRChipColorClass(w.pr),
+                    )}
+                  >
+                    #{w.pr.number}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+                <span>{s.label}</span>
+                {w.stale ? (
+                  <span className="text-[var(--color-status-attention)]">stalled</span>
+                ) : null}
+                {Number.isNaN(lastMs) ? null : (
+                  <span className="ml-auto" title={exact}>
+                    {formatRelativeTime(lastMs)}
+                  </span>
+                )}
+              </div>
+              {w.branch ? (
+                <span className="truncate font-[var(--font-mono)] text-[10px] text-[var(--color-text-muted)]">
+                  {w.branch}
+                </span>
+              ) : null}
+              {w.pr && getPRStatusLabel(w.pr) ? (
+                <span className="text-[10px] text-[var(--color-text-muted)]">
+                  PR {getPRStatusLabel(w.pr)}
+                </span>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
 /**
- * Self-contained cross-project session feed. Workers live in the LINKED
- * projects, not this orchestrator's project, so we poll the unscoped
- * `/api/sessions` endpoint directly rather than depending on the SSR-seeded
- * `useSessionEvents` hook (which is not callable standalone deep in the tree).
+ * Cross-project worker feed for a feature orchestrator. Workers live in the
+ * LINKED projects, so poll the unscoped `/api/sessions` endpoint directly
+ * (not the SSR-seeded useSessionEvents hook).
  */
-function useAllSessions(): DashboardSession[] {
+export function useFeatureWorkers(session: DashboardSession): WorkerHealth[] {
+  const slug = session.metadata["feature"] ?? "";
   const [sessions, setSessions] = useState<DashboardSession[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -97,21 +126,5 @@ function useAllSessions(): DashboardSession[] {
       clearInterval(timer);
     };
   }, []);
-  return sessions;
-}
-
-export function OrchestratorWorkersCard({ session }: { session: DashboardSession }) {
-  const slug = session.metadata["feature"] ?? "";
-  const sessions = useAllSessions();
-  const router = useRouter();
-  const workers = useMemo(
-    () => workerHealthList(sessions, slug, Date.now()),
-    [sessions, slug],
-  );
-  return (
-    <OrchestratorWorkersList
-      workers={workers}
-      onOpen={(projectId, id) => router.push(projectSessionPath(projectId, id))}
-    />
-  );
+  return workerHealthList(sessions, slug, Date.now());
 }
