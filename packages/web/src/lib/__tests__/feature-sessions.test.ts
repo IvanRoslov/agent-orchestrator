@@ -134,6 +134,12 @@ describe("workerHealthList", () => {
     expect(list.find((w) => w.id === "nodata")!.stale).toBe(false); // null activity never stale
     expect(list.find((w) => w.id === "fresh")!.stale).toBe(false);
   });
+
+  it("carries the raw lastActivityAt ISO string through to WorkerHealth", () => {
+    const iso = new Date(NOW - 60_000).toISOString();
+    const all = [s({ id: "w", branch: "feature/login/web", lastActivityAt: iso })];
+    expect(workerHealthList(all, "login", NOW)[0].lastActivityAt).toBe(iso);
+  });
 });
 
 describe("formatAgeShort", () => {

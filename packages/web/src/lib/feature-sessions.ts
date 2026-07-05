@@ -55,6 +55,7 @@ export interface WorkerHealth {
   ageMs: number;
   stale: boolean;
   pr: DashboardPR | null;
+  lastActivityAt: string;
 }
 
 /** Compact age label: "15s", "47m", "2h 5m". */
@@ -88,6 +89,7 @@ function toWorkerHealth(
     ageMs,
     stale: session.activity !== null && ageMs > staleMs,
     pr: session.pr,
+    lastActivityAt: session.lastActivityAt,
   };
 }
 
