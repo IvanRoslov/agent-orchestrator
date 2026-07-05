@@ -1,4 +1,5 @@
-import type { DashboardSession } from "./types";
+import type { ActivityState } from "@aoagents/ao-core";
+import type { DashboardPR, DashboardSession } from "./types";
 
 /**
  * A feature orchestrator is a dedicated orchestrator session spawned for a
@@ -31,4 +32,73 @@ export function listFeatureSessions(
   return (sessions ?? []).filter(
     (s) => isFeatureCoordinator(s) && (!projectId || s.projectId === projectId),
   );
+}
+
+const WORKER_STALE_MS = 15 * 60_000;
+
+/** Workers of a feature: sessions whose branch is `feature/<slug>/*`. */
+export function workersForFeature(
+  sessions: DashboardSession[] | null,
+  slug: string,
+): DashboardSession[] {
+  if (!slug) return [];
+  const prefix = `feature/${slug}/`;
+  return (sessions ?? []).filter((s) => s.branch?.startsWith(prefix) ?? false);
+}
+
+export interface WorkerHealth {
+  id: string;
+  projectId: string;
+  task: string;
+  branch: string | null;
+  activity: ActivityState | null;
+  ageMs: number;
+  stale: boolean;
+  pr: DashboardPR | null;
+}
+
+/** Compact age label: "15s", "47m", "2h 5m". */
+export function formatAgeShort(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${h}h ${rem}m` : `${h}h`;
+}
+
+function toWorkerHealth(
+  session: DashboardSession,
+  slug: string,
+  nowMs: number,
+  staleMs: number,
+): WorkerHealth {
+  const prefix = `feature/${slug}/`;
+  const task = session.branch?.startsWith(prefix)
+    ? session.branch.slice(prefix.length)
+    : (session.branch ?? session.id);
+  const ageMs = nowMs - new Date(session.lastActivityAt).getTime();
+  return {
+    id: session.id,
+    projectId: session.projectId,
+    task,
+    branch: session.branch,
+    activity: session.activity,
+    ageMs,
+    stale: session.activity !== null && ageMs > staleMs,
+    pr: session.pr,
+  };
+}
+
+/** Worker health for a feature, stale-first then oldest-first. */
+export function workerHealthList(
+  sessions: DashboardSession[] | null,
+  slug: string,
+  nowMs: number,
+  staleMs: number = WORKER_STALE_MS,
+): WorkerHealth[] {
+  return workersForFeature(sessions, slug)
+    .map((s) => toWorkerHealth(s, slug, nowMs, staleMs))
+    .sort((a, b) => Number(b.stale) - Number(a.stale) || b.ageMs - a.ageMs);
 }
