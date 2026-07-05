@@ -227,7 +227,7 @@ export function SessionDetailHeader({
       <div className="dashboard-app-header__spacer" />
       <div className="dashboard-app-header__actions">
         <DashboardNotificationButton />
-        {isFeatureOrchestrator && onToggleWorkers ? (
+        {isFeatureOrchestrator && onToggleWorkers && !isMobile && !terminalEnded ? (
           <button
             type="button"
             className={cn("dashboard-app-btn", !workersCollapsed && "topbar-pr-btn--open")}

@@ -49,4 +49,11 @@ describe("SessionDetailHeader — Workers toggle", () => {
     render(<SessionDetailHeader {...baseProps} isFeatureOrchestrator={false} onToggleWorkers={() => {}} />);
     expect(screen.queryByRole("button", { name: /toggle workers panel/i })).not.toBeInTheDocument();
   });
+
+  it("does not render the Workers button when isMobile is true", () => {
+    render(
+      <SessionDetailHeader {...baseProps} isMobile={true} onToggleWorkers={() => {}} />,
+    );
+    expect(screen.queryByRole("button", { name: /toggle workers panel/i })).not.toBeInTheDocument();
+  });
 });
