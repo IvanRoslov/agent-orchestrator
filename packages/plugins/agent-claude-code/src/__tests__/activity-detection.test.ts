@@ -686,4 +686,31 @@ describe("readLastRealActivityTimestamp", () => {
   it("returns null for a missing file", async () => {
     expect(await readLastRealActivityTimestamp("/no/such/file.jsonl")).toBeNull();
   });
+  it("ignores a newer system/away_summary idle marker and returns the last real turn", async () => {
+    // A worker that finished and went idle: last real assistant turn, then Claude's
+    // idle housekeeping (turn markers + an away_summary written ~1h later).
+    const real = "2026-07-06T14:46:09.230Z";
+    const p = jsonl(
+      { type: "assistant", timestamp: real, message: { role: "assistant", content: "Holding." } },
+      { type: "attachment", timestamp: "2026-07-06T14:46:09.411Z" },
+      { type: "system", subtype: "turn_duration", timestamp: "2026-07-06T14:46:09.414Z" },
+      { type: "system", subtype: "away_summary", timestamp: "2026-07-06T15:39:38.464Z" }, // idle marker, newer — must be ignored
+    );
+    expect((await readLastRealActivityTimestamp(p))?.toISOString()).toBe(real);
+  });
+  it("counts a user turn (tool_result / injected message) as activity", async () => {
+    const real = "2026-07-06T15:23:01.319Z";
+    const p = jsonl(
+      { type: "user", timestamp: real },
+      { type: "system", subtype: "away_summary", timestamp: "2026-07-06T15:39:41.191Z" },
+    );
+    expect((await readLastRealActivityTimestamp(p))?.toISOString()).toBe(real);
+  });
+  it("returns null when the window has no assistant/user turn", async () => {
+    const p = jsonl(
+      { type: "system", subtype: "away_summary", timestamp: "2026-07-06T15:39:41.191Z" },
+      { type: "pr-link", timestamp: "2026-07-06T15:22:55.764Z" },
+    );
+    expect(await readLastRealActivityTimestamp(p)).toBeNull();
+  });
 });

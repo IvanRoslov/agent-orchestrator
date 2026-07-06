@@ -342,13 +342,23 @@ const NOISE_JSONL_TYPES: ReadonlySet<string> = new Set([
   "pr-link",
 ]);
 
-/** How many trailing JSONL lines to scan for the last real (non-noise) entry. */
+/** How many trailing JSONL lines to scan for the last real conversation turn. */
 const REAL_ACTIVITY_SCAN_LINES = 200;
 
+/** JSONL entry types that represent a real conversation turn (a message the agent
+ *  sent or received, incl. tool_use / tool_result which are logged as these). All
+ *  other types — `system` turn/idle markers (`away_summary`, `turn_duration`,
+ *  `stop_hook_summary`), `attachment`, `pr-link`, `permission-mode`, etc. — are
+ *  housekeeping that fires without the agent doing new work, so they are NOT
+ *  activity. Anchoring on turns (rather than "any non-noise entry") keeps a
+ *  long-idle worker's real last-activity time from being reset by an idle marker. */
+const REAL_ACTIVITY_TURN_TYPES: ReadonlySet<string> = new Set(["assistant", "user"]);
+
 /**
- * The embedded `timestamp` of the last non-noise JSONL entry — the agent's real
- * last activity, as opposed to the file mtime (which housekeeping writes bump).
- * Returns null if no non-noise entry with a valid timestamp is in the scan window.
+ * The embedded `timestamp` of the last real conversation turn (`assistant`/`user`),
+ * i.e. the agent's real last activity — as opposed to the file mtime (which
+ * housekeeping writes bump) or idle markers like `system`/`away_summary`.
+ * Returns null if no such turn with a valid timestamp is in the scan window.
  */
 export async function readLastRealActivityTimestamp(sessionFile: string): Promise<Date | null> {
   let lines: string[];
@@ -367,7 +377,7 @@ export async function readLastRealActivityTimestamp(sessionFile: string): Promis
       continue;
     }
     const type = typeof obj.type === "string" ? obj.type : null;
-    if (type && NOISE_JSONL_TYPES.has(type)) continue;
+    if (!type || !REAL_ACTIVITY_TURN_TYPES.has(type)) continue;
     if (typeof obj.timestamp === "string") {
       const d = new Date(obj.timestamp);
       if (!Number.isNaN(d.getTime())) return d;
