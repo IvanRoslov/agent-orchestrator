@@ -1,6 +1,7 @@
 import {
   readLastJsonlEntry,
   readLastActivityEntry,
+  readLastLines,
   checkActivityLogState,
   getActivityFallbackState,
   isWindows,
@@ -341,6 +342,40 @@ const NOISE_JSONL_TYPES: ReadonlySet<string> = new Set([
   "pr-link",
 ]);
 
+/** How many trailing JSONL lines to scan for the last real (non-noise) entry. */
+const REAL_ACTIVITY_SCAN_LINES = 200;
+
+/**
+ * The embedded `timestamp` of the last non-noise JSONL entry — the agent's real
+ * last activity, as opposed to the file mtime (which housekeeping writes bump).
+ * Returns null if no non-noise entry with a valid timestamp is in the scan window.
+ */
+export async function readLastRealActivityTimestamp(sessionFile: string): Promise<Date | null> {
+  let lines: string[];
+  try {
+    lines = await readLastLines(sessionFile, REAL_ACTIVITY_SCAN_LINES);
+  } catch {
+    return null;
+  }
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let obj: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(lines[i]);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) continue;
+      obj = parsed as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const type = typeof obj.type === "string" ? obj.type : null;
+    if (type && NOISE_JSONL_TYPES.has(type)) continue;
+    if (typeof obj.timestamp === "string") {
+      const d = new Date(obj.timestamp);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+  }
+  return null;
+}
+
 /**
  * Determine current activity state for a Claude Code session.
  *
@@ -400,7 +435,7 @@ export async function getClaudeActivityState(
         staleNativeState = { state: "idle", timestamp: session.createdAt };
       } else {
         const ageMs = Date.now() - entry.modifiedAt.getTime();
-        const timestamp = entry.modifiedAt;
+        const timestamp = (await readLastRealActivityTimestamp(sessionFile)) ?? entry.modifiedAt;
 
         const activeWindowMs = Math.min(DEFAULT_ACTIVE_WINDOW_MS, threshold);
         switch (entry.lastType) {

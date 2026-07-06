@@ -157,7 +157,10 @@ export function refreshDashboardSessionDerivedFields(session: DashboardSession):
 }
 
 /** Convert a core Session to a DashboardSession (without PR/issue enrichment). */
-export function sessionToDashboard(session: Session): DashboardSession {
+export function sessionToDashboard(
+  session: Session,
+  realLastActivityAt?: string,
+): DashboardSession {
   const agentSummary = session.agentInfo?.summary;
   const summary = agentSummary ?? session.metadata["summary"] ?? null;
 
@@ -186,6 +189,7 @@ export function sessionToDashboard(session: Session): DashboardSession {
     summaryIsFallback: agentSummary ? (session.agentInfo?.summaryIsFallback ?? false) : false,
     createdAt: session.createdAt.toISOString(),
     lastActivityAt: session.lastActivityAt.toISOString(),
+    realLastActivityAt,
     pr: session.pr
       ? {
           ...basicPRToDashboard(session.pr),

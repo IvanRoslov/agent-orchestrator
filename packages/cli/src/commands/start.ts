@@ -46,10 +46,11 @@ import {
   reapAoOrphans,
   type DaemonChildSweepResult,
   type AoOrphanProcess,
+  type Agent,
 } from "@aoagents/ao-core";
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
 import { exec, execSilent, git } from "../lib/shell.js";
-import { getSessionManager } from "../lib/create-session-manager.js";
+import { getSessionManager, getPluginRegistry } from "../lib/create-session-manager.js";
 import { listLifecycleWorkers } from "../lib/lifecycle-service.js";
 import { startBunTmpJanitor } from "../lib/bun-tmp-janitor.js";
 import { startFeatureHeartbeat } from "../lib/feature-heartbeat.js";
@@ -1849,9 +1850,22 @@ export function registerStart(program: Command): void {
           // Wake stalled feature orchestrators: push a worker-status summary when a
           // worker has had no movement for >15 min. Runs for the life of `ao start`.
           const heartbeatSm = await getSessionManager(config);
+          const heartbeatRegistry = await getPluginRegistry(config);
           startFeatureHeartbeat({
             list: () => heartbeatSm.list(),
             send: (id, msg) => heartbeatSm.send(id, msg),
+            activityTimestamp: async (s) => {
+              const agentName = s.metadata["agent"];
+              if (!agentName) return null;
+              const agent = heartbeatRegistry.get<Agent>("agent", agentName);
+              if (!agent?.getActivityState) return null;
+              try {
+                const detected = await agent.getActivityState(s);
+                return detected?.timestamp ?? null;
+              } catch {
+                return null;
+              }
+            },
             onError: (err) => console.warn("[feature-heartbeat] tick failed:", err),
           });
 

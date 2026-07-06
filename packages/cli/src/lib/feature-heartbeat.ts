@@ -14,13 +14,19 @@ export function workersForOrchestrator(orchestrator: Session, all: Session[]): S
   );
 }
 
-function ageMs(session: Session, now: number): number {
-  return now - session.lastActivityAt.getTime();
+function ageMs(session: Session, now: number, realTs?: Date | null): number {
+  return now - (realTs ?? session.lastActivityAt).getTime();
 }
 
-/** No movement past the threshold. Null activity = no data → never stale. */
-export function isStale(session: Session, now: number, staleMs: number = STALE_MS): boolean {
-  return session.activity !== null && ageMs(session, now) > staleMs;
+/** No movement past the threshold. Null activity = no data → never stale.
+ *  `realTs` (the agent's real last-activity time) wins over `lastActivityAt`. */
+export function isStale(
+  session: Session,
+  now: number,
+  staleMs: number = STALE_MS,
+  realTs?: Date | null,
+): boolean {
+  return session.activity !== null && ageMs(session, now, realTs) > staleMs;
 }
 
 function taskName(slug: string, worker: Session): string {
@@ -45,16 +51,19 @@ export function buildSummary(
   workers: Session[],
   now: number,
   staleMs: number = STALE_MS,
+  tsMap?: Map<string, Date>,
 ): string {
   const slug = orchestrator.metadata["feature"] ?? "";
   const ordered = [...workers].sort(
-    (a, b) => Number(isStale(b, now, staleMs)) - Number(isStale(a, now, staleMs)),
+    (a, b) =>
+      Number(isStale(b, now, staleMs, tsMap?.get(b.id))) -
+      Number(isStale(a, now, staleMs, tsMap?.get(a.id))),
   );
   const lines = ordered.map((w) => {
     const state = (w.activity ?? "unknown").toUpperCase();
-    const age = formatAge(ageMs(w, now));
+    const age = formatAge(ageMs(w, now, tsMap?.get(w.id)));
     const pr = w.pr ? ` · PR #${w.pr.number}` : "";
-    const flag = isStale(w, now, staleMs)
+    const flag = isStale(w, now, staleMs, tsMap?.get(w.id))
       ? " — no movement; may be done or stuck, check it."
       : " — ok.";
     return `- ${w.id} (task ${taskName(slug, w)}): ${state} ${age}${pr}${flag}`;
@@ -74,20 +83,22 @@ export function evaluateOrchestrator(
   lastSentAt: number | undefined,
   staleMs: number = STALE_MS,
   renudgeMs: number = RENUDGE_MS,
+  tsMap?: Map<string, Date>,
 ): { message: string } | null {
   if (!orchestrator.metadata["feature"]) return null;
   if (orchestrator.activity === "exited") return null; // dead
   if (orchestrator.activity === "active") return null; // busy — don't interrupt
   const workers = workersForOrchestrator(orchestrator, all);
   if (workers.length === 0) return null;
-  if (!workers.some((w) => isStale(w, now, staleMs))) return null;
+  if (!workers.some((w) => isStale(w, now, staleMs, tsMap?.get(w.id)))) return null;
   if (lastSentAt !== undefined && now - lastSentAt < renudgeMs) return null; // throttle
-  return { message: buildSummary(orchestrator, workers, now, staleMs) };
+  return { message: buildSummary(orchestrator, workers, now, staleMs, tsMap) };
 }
 
 export interface HeartbeatDeps {
   list: () => Promise<Session[]>;
   send: (sessionId: SessionId, message: string) => Promise<void>;
+  activityTimestamp?: (session: Session) => Promise<Date | null>;
   now?: () => number;
   intervalMs?: number;
   staleMs?: number;
@@ -113,10 +124,26 @@ export function startFeatureHeartbeat(deps: HeartbeatDeps): boolean {
       try {
         const sessions = await deps.list();
         const t = now();
+        const tsMap = new Map<string, Date>();
+        if (deps.activityTimestamp) {
+          const candidates = sessions.filter(
+            (s) => (s.branch?.startsWith("feature/") ?? false) && s.activity !== "exited",
+          );
+          await Promise.all(
+            candidates.map(async (s) => {
+              try {
+                const ts = await deps.activityTimestamp!(s);
+                if (ts) tsMap.set(s.id, ts);
+              } catch {
+                /* best-effort */
+              }
+            }),
+          );
+        }
         for (const orch of sessions) {
           try {
             const decision = evaluateOrchestrator(
-              orch, sessions, t, lastSent.get(orch.id), staleMs, renudgeMs,
+              orch, sessions, t, lastSent.get(orch.id), staleMs, renudgeMs, tsMap,
             );
             if (!decision) continue;
             await deps.send(orch.id, decision.message);

@@ -1,4 +1,4 @@
-import { isOrchestratorSession, isTerminalSession } from "@aoagents/ao-core";
+import { isOrchestratorSession, isTerminalSession, type Agent } from "@aoagents/ao-core";
 import { getServices } from "@/lib/services";
 import {
   sessionToDashboard,
@@ -142,7 +142,21 @@ export async function GET(request: Request) {
     });
 
     // Convert to dashboard format
-    let dashboardSessions = workerSessions.map(sessionToDashboard);
+    const realActivity = new Map<string, string>();
+    await Promise.all(
+      workerSessions
+        .filter((s) => !isTerminalSession(s))
+        .map(async (s) => {
+          try {
+            const agent = registry.get<Agent>("agent", s.metadata["agent"] ?? "");
+            const detected = await agent?.getActivityState(s);
+            if (detected?.timestamp) realActivity.set(s.id, detected.timestamp.toISOString());
+          } catch {
+            /* best-effort — fall back to lastActivityAt */
+          }
+        }),
+    );
+    let dashboardSessions = workerSessions.map((s) => sessionToDashboard(s, realActivity.get(s.id)));
 
     if (activeOnly) {
       const activeIndices = workerSessions

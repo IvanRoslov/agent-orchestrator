@@ -128,6 +128,20 @@ describe("sessionToDashboard", () => {
     expect(dashboard.lastActivityAt).toBe("2025-01-01T01:00:00.000Z");
   });
 
+  it("sets realLastActivityAt from the passed value", () => {
+    const coreSession = createCoreSession();
+    const dashboard = sessionToDashboard(coreSession, "2026-07-05T22:43:59.696Z");
+
+    expect(dashboard.realLastActivityAt).toBe("2026-07-05T22:43:59.696Z");
+  });
+
+  it("leaves realLastActivityAt undefined when no value is passed", () => {
+    const coreSession = createCoreSession();
+    const dashboard = sessionToDashboard(coreSession);
+
+    expect(dashboard.realLastActivityAt).toBeUndefined();
+  });
+
   it("should expose canonical lifecycle fields", () => {
     const coreSession = createCoreSession();
     const dashboard = sessionToDashboard(coreSession);

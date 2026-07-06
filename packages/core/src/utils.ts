@@ -136,6 +136,46 @@ async function readLastLine(filePath: string): Promise<string | null> {
 }
 
 /**
+ * Read up to `maxLines` trailing non-empty lines from a file, in file order.
+ * Backward chunked read — pure Node.js, safe for large files.
+ */
+export async function readLastLines(filePath: string, maxLines: number): Promise<string[]> {
+  if (maxLines <= 0) return [];
+  const CHUNK = 4096;
+  const fh = await open(filePath, "r");
+  try {
+    const { size } = await fh.stat();
+    if (size === 0) return [];
+
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let pos = size;
+
+    while (pos > 0) {
+      const readSize = Math.min(CHUNK, pos);
+      pos -= readSize;
+      const chunk = Buffer.alloc(readSize);
+      await fh.read(chunk, 0, readSize, pos);
+      chunks.unshift(chunk);
+      totalBytes += readSize;
+
+      const tail = Buffer.concat(chunks, totalBytes).toString("utf-8");
+      const lines = tail.split("\n");
+      // When pos > 0 the first element may be a truncated line — drop it until
+      // we've read to the start of the file.
+      const complete = pos === 0 ? lines : lines.slice(1);
+      const nonEmpty = complete.map((l) => l.trim()).filter((l) => l.length > 0);
+      if (nonEmpty.length >= maxLines || pos === 0) {
+        return nonEmpty.slice(-maxLines);
+      }
+    }
+    return [];
+  } finally {
+    await fh.close();
+  }
+}
+
+/**
  * Read the last entry from a JSONL file.
  * Reads backwards from end of file — pure Node.js, no external binaries.
  *
