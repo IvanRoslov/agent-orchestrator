@@ -291,7 +291,7 @@ describe("runtime.create()", () => {
     // kill-session must run so we don't leave an orphaned tmux session
     expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
-      ["kill-session", "-t", "setopt-fail"],
+      ["kill-session", "-t", "=setopt-fail"],
       expectedTmuxOptions,
     );
   });
@@ -375,7 +375,7 @@ describe("runtime.destroy()", () => {
 
     expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
-      ["kill-session", "-t", "destroy-test"],
+      ["kill-session", "-t", "=destroy-test"],
       expectedTmuxOptions,
     );
   });
@@ -432,19 +432,19 @@ describe("runtime.sendMessage()", () => {
     expect(mockExecFileCustom).toHaveBeenNthCalledWith(
       1,
       "tmux",
-      ["send-keys", "-t", "msg-short", "C-u"],
+      ["send-keys", "-t", "=msg-short:", "C-u"],
       expectedTmuxOptions,
     );
     // Short text goes through literal send-keys.
     expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
-      ["send-keys", "-t", "msg-short", "-l", "hello world"],
+      ["send-keys", "-t", "=msg-short:", "-l", "hello world"],
       expectedTmuxOptions,
     );
     // And the message is submitted with Enter.
     expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
-      ["send-keys", "-t", "msg-short", "Enter"],
+      ["send-keys", "-t", "=msg-short:", "Enter"],
       expectedTmuxOptions,
     );
   });
@@ -476,7 +476,7 @@ describe("runtime.sendMessage()", () => {
     expect(mockExecFileCustom).toHaveBeenNthCalledWith(
       1,
       "tmux",
-      ["send-keys", "-t", "msg-long", "C-u"],
+      ["send-keys", "-t", "=msg-long:", "C-u"],
       expectedTmuxOptions,
     );
 
@@ -495,12 +495,12 @@ describe("runtime.sendMessage()", () => {
     // paste-buffer.
     expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
-      ["paste-buffer", "-b", "ao-test-uuid-1234", "-t", "msg-long", "-d"],
+      ["paste-buffer", "-b", "ao-test-uuid-1234", "-t", "=msg-long:", "-d"],
       expectedTmuxOptions,
     );
 
     // Submitted with Enter.
-    expect(lastSendKeys()).toEqual(["send-keys", "-t", "msg-long", "Enter"]);
+    expect(lastSendKeys()).toEqual(["send-keys", "-t", "=msg-long:", "Enter"]);
 
     // Verify writeFileSync was called with the message.
     expect(fs.writeFileSync).toHaveBeenCalledWith(
@@ -582,7 +582,7 @@ describe("runtime.getOutput()", () => {
     expect(output).toBe("some output\nfrom tmux");
     expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
-      ["capture-pane", "-t", "output-test", "-p", "-S", "-50"],
+      ["capture-pane", "-t", "=output-test:", "-p", "-S", "-50"],
       expectedTmuxOptions,
     );
   });
@@ -597,7 +597,7 @@ describe("runtime.getOutput()", () => {
 
     expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
-      ["capture-pane", "-t", "output-custom", "-p", "-S", "-100"],
+      ["capture-pane", "-t", "=output-custom:", "-p", "-S", "-100"],
       expectedTmuxOptions,
     );
   });
@@ -626,7 +626,7 @@ describe("runtime.isAlive()", () => {
     expect(alive).toBe(true);
     expect(mockExecFileCustom).toHaveBeenCalledWith(
       "tmux",
-      ["has-session", "-t", "alive-test"],
+      ["has-session", "-t", "=alive-test"],
       expectedTmuxOptions,
     );
   });

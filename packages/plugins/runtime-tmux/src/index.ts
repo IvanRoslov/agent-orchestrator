@@ -68,6 +68,17 @@ function writeLaunchScript(command: string): string {
   return `bash ${shellEscape(scriptPath)}`;
 }
 
+/**
+ * Exact-match tmux target. A bare `-t name` does PREFIX matching, so a command
+ * aimed at session "app-8" silently resolves to "app-81" when the exact session
+ * is absent — leaking has-session/kill-session/send onto the wrong session. The
+ * `=` prefix forces an exact match. Session-target subcommands (has-session,
+ * kill-session) accept `=name`; pane-target subcommands (send-keys, paste-buffer,
+ * capture-pane) need the trailing `:` for `=` to resolve a pane.
+ */
+const exactSession = (name: string): string => `=${name}`;
+const exactPane = (name: string): string => `=${name}:`;
+
 /** Run a tmux command and return stdout */
 async function tmux(...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("tmux", args, {
@@ -131,7 +142,7 @@ export function create(): Runtime {
         await tmux("set-option", "-t", sessionName, "status", "off");
       } catch (err: unknown) {
         try {
-          await tmux("kill-session", "-t", sessionName);
+          await tmux("kill-session", "-t", exactSession(sessionName));
         } catch {
           // Best-effort cleanup
         }
@@ -153,7 +164,7 @@ export function create(): Runtime {
 
     async destroy(handle: RuntimeHandle): Promise<void> {
       try {
-        await tmux("kill-session", "-t", handle.id);
+        await tmux("kill-session", "-t", exactSession(handle.id));
       } catch {
         // Session may already be dead — that's fine
       }
@@ -161,7 +172,7 @@ export function create(): Runtime {
 
     async sendMessage(handle: RuntimeHandle, message: string): Promise<void> {
       // Clear any partial input
-      await tmux("send-keys", "-t", handle.id, "C-u");
+      await tmux("send-keys", "-t", exactPane(handle.id), "C-u");
 
       // For long or multiline messages, use load-buffer + paste-buffer
       // Use randomUUID to avoid temp file collisions on concurrent sends
@@ -171,7 +182,7 @@ export function create(): Runtime {
         writeFileSync(tmpPath, message, { encoding: "utf-8", mode: 0o600 });
         try {
           await tmux("load-buffer", "-b", bufferName, tmpPath);
-          await tmux("paste-buffer", "-b", bufferName, "-t", handle.id, "-d");
+          await tmux("paste-buffer", "-b", bufferName, "-t", exactPane(handle.id), "-d");
         } finally {
           // Clean up temp file and tmux buffer (in case paste-buffer failed
           // and the -d flag didn't delete it)
@@ -189,7 +200,7 @@ export function create(): Runtime {
       } else {
         // Use -l (literal) so text like "Enter" or "Space" isn't interpreted
         // as tmux key names
-        await tmux("send-keys", "-t", handle.id, "-l", message);
+        await tmux("send-keys", "-t", exactPane(handle.id), "-l", message);
       }
 
       // Submit the pasted text. A single Enter after a fixed delay races with
@@ -209,7 +220,7 @@ export function create(): Runtime {
       // harmless stray Enter on an empty composer.
       const capture = async (): Promise<string> => {
         try {
-          return await tmux("capture-pane", "-t", handle.id, "-p");
+          return await tmux("capture-pane", "-t", exactPane(handle.id), "-p");
         } catch {
           return "";
         }
@@ -238,7 +249,7 @@ export function create(): Runtime {
       // Submit, retrying Enter until the draft leaves the composer. If we have
       // no needle to track, fall back to a single Enter (legacy behavior).
       for (let attempt = 0; attempt < ENTER_SUBMIT_ATTEMPTS; attempt++) {
-        await tmux("send-keys", "-t", handle.id, "Enter");
+        await tmux("send-keys", "-t", exactPane(handle.id), "Enter");
         if (!needle) return;
         await sleep(ENTER_VERIFY_MS);
         if (!draftPresent(await capture())) return; // composer cleared → submitted
@@ -247,7 +258,7 @@ export function create(): Runtime {
 
     async getOutput(handle: RuntimeHandle, lines = 50): Promise<string> {
       try {
-        return await tmux("capture-pane", "-t", handle.id, "-p", "-S", `-${lines}`);
+        return await tmux("capture-pane", "-t", exactPane(handle.id), "-p", "-S", `-${lines}`);
       } catch {
         return "";
       }
@@ -255,7 +266,7 @@ export function create(): Runtime {
 
     async isAlive(handle: RuntimeHandle): Promise<boolean> {
       try {
-        await tmux("has-session", "-t", handle.id);
+        await tmux("has-session", "-t", exactSession(handle.id));
         return true;
       } catch {
         return false;

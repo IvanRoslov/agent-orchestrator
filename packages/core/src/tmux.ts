@@ -6,6 +6,18 @@
 
 import { execFile } from "node:child_process";
 
+/**
+ * Exact-match tmux target. A bare `-t name` does PREFIX matching, so a
+ * command aimed at session "app-8" silently resolves to "app-81" when the
+ * exact session is absent — leaking has-session/kill-session/send onto the
+ * wrong session. The `=` prefix forces an exact session match. Session-target
+ * subcommands (has-session, kill-session) accept `=name`; pane-target
+ * subcommands (send-keys, capture-pane, paste-buffer, list-panes) need the
+ * trailing `:` (their `=name` form fails to resolve a pane).
+ */
+const exactSession = (name: string): string => `=${name}`;
+const exactPane = (name: string): string => `=${name}:`;
+
 /** Run a tmux command and return stdout. */
 function tmux(...args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -68,7 +80,7 @@ export async function listSessions(): Promise<TmuxSessionInfo[]> {
 /** Check if a specific tmux session exists. */
 export async function hasSession(sessionName: string): Promise<boolean> {
   try {
-    await tmux("has-session", "-t", sessionName);
+    await tmux("has-session", "-t", exactSession(sessionName));
     return true;
   } catch {
     return false;
@@ -87,7 +99,7 @@ export async function sendKeys(
   pressEnter = true,
 ): Promise<void> {
   // Clear any partial input first (matches bash reference scripts)
-  await tmux("send-keys", "-t", sessionName, "Escape");
+  await tmux("send-keys", "-t", exactPane(sessionName), "Escape");
   // Small delay to ensure Escape is processed before pasting
   await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -104,7 +116,7 @@ export async function sendKeys(
 
     try {
       await tmux("load-buffer", "-b", bufferName, tmpFile);
-      await tmux("paste-buffer", "-b", bufferName, "-d", "-t", sessionName);
+      await tmux("paste-buffer", "-b", bufferName, "-d", "-t", exactPane(sessionName));
     } finally {
       try {
         unlinkSync(tmpFile);
@@ -115,7 +127,7 @@ export async function sendKeys(
   } else {
     // Use -l (literal) to prevent tmux from interpreting text as key names
     // (e.g. "Enter", "Escape", "C-c" would be treated as keypresses without -l)
-    await tmux("send-keys", "-t", sessionName, "-l", text);
+    await tmux("send-keys", "-t", exactPane(sessionName), "-l", text);
   }
 
   if (pressEnter) {
@@ -125,7 +137,7 @@ export async function sendKeys(
     if (text.includes("\n") || text.length > 200) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    await tmux("send-keys", "-t", sessionName, "Enter");
+    await tmux("send-keys", "-t", exactPane(sessionName), "Enter");
   }
 }
 
@@ -136,12 +148,12 @@ export async function sendKeys(
  * @param lines - Number of scrollback lines to capture (default 30)
  */
 export async function capturePane(sessionName: string, lines = 30): Promise<string> {
-  return tmux("capture-pane", "-t", sessionName, "-p", "-S", `-${lines}`);
+  return tmux("capture-pane", "-t", exactPane(sessionName), "-p", "-S", `-${lines}`);
 }
 
 /** Kill a tmux session. */
 export async function killSession(sessionName: string): Promise<void> {
-  await tmux("kill-session", "-t", sessionName);
+  await tmux("kill-session", "-t", exactSession(sessionName));
 }
 
 /**
@@ -150,7 +162,7 @@ export async function killSession(sessionName: string): Promise<void> {
  */
 export async function getPaneTTY(sessionName: string): Promise<string | null> {
   try {
-    const output = await tmux("list-panes", "-t", sessionName, "-F", "#{pane_tty}");
+    const output = await tmux("list-panes", "-t", exactPane(sessionName), "-F", "#{pane_tty}");
     const tty = output.trim().split("\n")[0];
     return tty || null;
   } catch {

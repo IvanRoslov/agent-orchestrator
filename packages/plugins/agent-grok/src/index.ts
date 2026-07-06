@@ -99,7 +99,8 @@ function buildGrokCommand(config: AgentLaunchConfig, sessionId?: string | null):
 async function captureTmuxOutput(handle: RuntimeHandle): Promise<string> {
   const { stdout } = await execFileAsync(
     "tmux",
-    ["capture-pane", "-t", handle.id, "-p", "-S", "-120"],
+    // =id: forces exact-session pane match; bare -t prefix-matches "app-8"→"app-81".
+    ["capture-pane", "-t", `=${handle.id}:`, "-p", "-S", "-120"],
     { timeout: 5_000 },
   );
   return stdout;
@@ -211,7 +212,8 @@ function createGrokAgent(): Agent {
           if (isWindows()) return PROCESS_PROBE_INDETERMINATE;
           const { stdout: ttyOut } = await execFileAsync(
             "tmux",
-            ["list-panes", "-t", handle.id, "-F", "#{pane_tty}"],
+            // =id: forces exact-session pane match; bare -t prefix-matches "app-8"→"app-81".
+            ["list-panes", "-t", `=${handle.id}:`, "-F", "#{pane_tty}"],
             { timeout: 30_000 },
           );
           const ttys = ttyOut

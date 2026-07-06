@@ -507,7 +507,7 @@ describe("workspace hooks", () => {
     expect(mockSetupPathWrapperWorkspace).toHaveBeenCalledWith("/workspace/test");
     expect(mockExecFileAsync).toHaveBeenCalledWith(
       "tmux",
-      ["capture-pane", "-t", "ao-smoke", "-p", "-S", "-120"],
+      ["capture-pane", "-t", "=ao-smoke:", "-p", "-S", "-120"],
       { timeout: 5_000 },
     );
   });

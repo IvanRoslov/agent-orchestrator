@@ -214,7 +214,10 @@ export async function findClaudeProcess(
       if (isWindows()) return null;
       const { stdout: ttyOut } = await execFileAsync(
         "tmux",
-        ["list-panes", "-t", handle.id, "-F", "#{pane_tty}"],
+        // `=id:` forces an exact-session pane match. A bare `-t id` prefix-matches,
+        // so probing "app-8" would read "app-81"'s TTY and report the wrong session
+        // as alive (false liveness → zombie restore + wrong-session kills).
+        ["list-panes", "-t", `=${handle.id}:`, "-F", "#{pane_tty}"],
         { timeout: 30_000 },
       );
       const ttys = ttyOut

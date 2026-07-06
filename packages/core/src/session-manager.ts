@@ -315,7 +315,9 @@ async function getTmuxForegroundCommand(sessionName: string): Promise<string | n
   try {
     const { stdout } = await execFileAsync(
       "tmux",
-      ["display-message", "-p", "-t", sessionName, "#{pane_current_command}"],
+      // `=name:` forces an exact-session pane match — a bare `-t name` prefix-matches,
+      // so "app-8" would read "app-81"'s foreground command (see tmux.ts exactPane).
+      ["display-message", "-p", "-t", `=${sessionName}:`, "#{pane_current_command}"],
       { timeout: 5_000, windowsHide: true },
     );
     const command = stdout.trim();

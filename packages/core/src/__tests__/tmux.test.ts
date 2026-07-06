@@ -105,7 +105,7 @@ describe("hasSession", () => {
     expect(await hasSession("app-1")).toBe(true);
     expect(mockExecFile).toHaveBeenCalledWith(
       "tmux",
-      ["has-session", "-t", "app-1"],
+      ["has-session", "-t", "=app-1"],
       expect.any(Object),
       expect.any(Function),
     );
@@ -127,13 +127,13 @@ describe("sendKeys", () => {
     expect(mockExecFile).toHaveBeenCalledTimes(3);
     // Call 0: Escape to clear partial input
     const escapeArgs = mockExecFile.mock.calls[0][1] as string[];
-    expect(escapeArgs).toEqual(["send-keys", "-t", "app-1", "Escape"]);
+    expect(escapeArgs).toEqual(["send-keys", "-t", "=app-1:", "Escape"]);
     // Call 1: text
     const textArgs = mockExecFile.mock.calls[1][1] as string[];
-    expect(textArgs).toEqual(["send-keys", "-t", "app-1", "-l", "hello world"]);
+    expect(textArgs).toEqual(["send-keys", "-t", "=app-1:", "-l", "hello world"]);
     // Call 2: Enter
     const enterArgs = mockExecFile.mock.calls[2][1] as string[];
-    expect(enterArgs).toEqual(["send-keys", "-t", "app-1", "Enter"]);
+    expect(enterArgs).toEqual(["send-keys", "-t", "=app-1:", "Enter"]);
   });
 
   it("skips Enter when pressEnter=false", async () => {
@@ -144,7 +144,7 @@ describe("sendKeys", () => {
 
     expect(mockExecFile).toHaveBeenCalledTimes(2);
     const escapeArgs = mockExecFile.mock.calls[0][1] as string[];
-    expect(escapeArgs).toEqual(["send-keys", "-t", "app-1", "Escape"]);
+    expect(escapeArgs).toEqual(["send-keys", "-t", "=app-1:", "Escape"]);
   });
 
   it("uses load-buffer with named buffer for long text", async () => {
@@ -163,7 +163,7 @@ describe("sendKeys", () => {
 
     // Call 0: Escape
     const escapeArgs = mockExecFile.mock.calls[0][1] as string[];
-    expect(escapeArgs).toEqual(["send-keys", "-t", "app-1", "Escape"]);
+    expect(escapeArgs).toEqual(["send-keys", "-t", "=app-1:", "Escape"]);
 
     // Call 1: load-buffer with named buffer
     const loadArgs = mockExecFile.mock.calls[1][1] as string[];
@@ -178,7 +178,7 @@ describe("sendKeys", () => {
     expect(pasteArgs[2]).toMatch(/^ao-/);
     expect(pasteArgs).toContain("-d");
     expect(pasteArgs).toContain("-t");
-    expect(pasteArgs).toContain("app-1");
+    expect(pasteArgs).toContain("=app-1:");
   });
 
   it("uses load-buffer for multiline text", async () => {
@@ -208,7 +208,7 @@ describe("capturePane", () => {
     expect(output).toBe("some output\nfrom tmux\n");
     expect(mockExecFile).toHaveBeenCalledWith(
       "tmux",
-      ["capture-pane", "-t", "app-1", "-p", "-S", "-30"],
+      ["capture-pane", "-t", "=app-1:", "-p", "-S", "-30"],
       expect.any(Object),
       expect.any(Function),
     );
@@ -232,7 +232,7 @@ describe("killSession", () => {
 
     expect(mockExecFile).toHaveBeenCalledWith(
       "tmux",
-      ["kill-session", "-t", "app-1"],
+      ["kill-session", "-t", "=app-1"],
       expect.any(Object),
       expect.any(Function),
     );

@@ -307,7 +307,8 @@ function createCursorAgent(): Agent {
         if (handle.runtimeName === "tmux" && handle.id) {
           const { stdout: ttyOut } = await execFileAsync(
             "tmux",
-            ["list-panes", "-t", handle.id, "-F", "#{pane_tty}"],
+            // =id: forces exact-session pane match; bare -t prefix-matches "app-8"→"app-81".
+            ["list-panes", "-t", `=${handle.id}:`, "-F", "#{pane_tty}"],
             { timeout: 30_000 },
           );
           const ttys = ttyOut
