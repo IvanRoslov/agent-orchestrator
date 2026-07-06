@@ -173,3 +173,30 @@ describe("railKind", () => {
     expect(railKind(coord, { ...base, terminalEnded: true })).toBe("none");
   });
 });
+
+describe("workerHealthList prefers realLastActivityAt", () => {
+  it("uses realLastActivityAt for age/stale/lastActivityAt when present", () => {
+    const realOld = new Date(NOW - STALE - 60_000).toISOString();
+    const all = [
+      s({
+        id: "w",
+        branch: "feature/login/web",
+        activity: "idle",
+        lastActivityAt: new Date(NOW - 1000).toISOString(), // fresh (polluted)
+        realLastActivityAt: realOld, // real: 16m ago
+      }),
+    ];
+    const h = workerHealthList(all, "login", NOW)[0];
+    expect(h.lastActivityAt).toBe(realOld);
+    expect(h.stale).toBe(true);
+    expect(h.ageMs).toBeGreaterThan(STALE);
+  });
+
+  it("falls back to lastActivityAt when realLastActivityAt is absent", () => {
+    const fresh = new Date(NOW - 1000).toISOString();
+    const all = [s({ id: "w2", branch: "feature/login/web", activity: "idle", lastActivityAt: fresh })];
+    const h = workerHealthList(all, "login", NOW)[0];
+    expect(h.lastActivityAt).toBe(fresh);
+    expect(h.stale).toBe(false);
+  });
+});

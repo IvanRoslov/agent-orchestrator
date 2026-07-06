@@ -79,7 +79,8 @@ function toWorkerHealth(
   const task = session.branch?.startsWith(prefix)
     ? session.branch.slice(prefix.length)
     : (session.branch ?? session.id);
-  const ageMs = nowMs - new Date(session.lastActivityAt).getTime();
+  const activityIso = session.realLastActivityAt ?? session.lastActivityAt;
+  const ageMs = nowMs - new Date(activityIso).getTime();
   return {
     id: session.id,
     projectId: session.projectId,
@@ -89,7 +90,7 @@ function toWorkerHealth(
     ageMs,
     stale: session.activity !== null && ageMs > staleMs,
     pr: session.pr,
-    lastActivityAt: session.lastActivityAt,
+    lastActivityAt: activityIso,
   };
 }
 
