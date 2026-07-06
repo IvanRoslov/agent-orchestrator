@@ -7,6 +7,7 @@ import {
   isRetryableHttpStatus,
   normalizeRetryConfig,
   readLastJsonlEntry,
+  readLastLines,
   shellEscape,
 } from "../utils.js";
 import { parsePrFromUrl } from "../utils/pr.js";
@@ -142,6 +143,31 @@ describe("readLastJsonlEntry", () => {
     const result = await readLastJsonlEntry(path);
     expect(result!.lastSubtype).toBeNull();
     expect(result!.lastLevel).toBeNull();
+  });
+});
+
+describe("readLastLines", () => {
+  function tmpFile(content: string): string {
+    const dir = mkdtempSync(join(tmpdir(), "ao-utils-"));
+    const p = join(dir, "f.jsonl");
+    writeFileSync(p, content, "utf-8");
+    return p;
+  }
+
+  it("returns the last N non-empty lines in order", async () => {
+    const p = tmpFile("a\nb\nc\nd\ne\n");
+    expect(await readLastLines(p, 2)).toEqual(["d", "e"]);
+    expect(await readLastLines(p, 10)).toEqual(["a", "b", "c", "d", "e"]);
+  });
+
+  it("ignores trailing/blank lines and handles no final newline", async () => {
+    const p = tmpFile("x\n\ny\nz");
+    expect(await readLastLines(p, 2)).toEqual(["y", "z"]);
+  });
+
+  it("returns [] for empty file or maxLines<=0", async () => {
+    expect(await readLastLines(tmpFile(""), 5)).toEqual([]);
+    expect(await readLastLines(tmpFile("a\nb\n"), 0)).toEqual([]);
   });
 });
 
