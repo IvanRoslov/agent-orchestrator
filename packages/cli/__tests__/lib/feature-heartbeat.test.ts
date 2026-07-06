@@ -110,6 +110,21 @@ describe("evaluateOrchestrator", () => {
   });
 });
 
+describe("real-timestamp staleness", () => {
+  it("isStale uses the injected real timestamp over a fresh lastActivityAt", () => {
+    const w = worker({ activity: "idle", lastActivityAt: new Date(NOW - 1000) }); // fresh
+    const oldReal = new Date(NOW - STALE_MS - 60_000); // 16m ago
+    expect(isStale(w, NOW, STALE_MS)).toBe(false); // by lastActivityAt → fresh
+    expect(isStale(w, NOW, STALE_MS, oldReal)).toBe(true); // by real ts → stale
+  });
+  it("evaluateOrchestrator nudges when the tsMap makes a worker stale despite fresh lastActivityAt", () => {
+    const w = worker({ id: "web-1", branch: "feature/login/web", activity: "idle", lastActivityAt: new Date(NOW - 1000) });
+    const tsMap = new Map([["web-1", new Date(NOW - STALE_MS - 1)]]);
+    expect(evaluateOrchestrator(orch(), [orch(), w], NOW, undefined)).toBeNull(); // no map → fresh
+    expect(evaluateOrchestrator(orch(), [orch(), w], NOW, undefined, STALE_MS, RENUDGE_MS, tsMap)).not.toBeNull();
+  });
+});
+
 describe("startFeatureHeartbeat", () => {
   afterEach(async () => {
     await stopFeatureHeartbeat();
