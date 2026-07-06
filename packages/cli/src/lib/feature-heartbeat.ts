@@ -86,7 +86,11 @@ export function evaluateOrchestrator(
   tsMap?: Map<string, Date>,
 ): { message: string } | null {
   if (!orchestrator.metadata["feature"]) return null;
-  if (orchestrator.activity === "exited") return null; // dead
+  // Only nudge orchestrators with a live agent. A dead/stale orchestrator (tmux
+  // gone, never archived) enriches to activity `null` or `exited` — sending to
+  // it triggers a doomed restoreForDelivery. A live agent always reports a
+  // concrete non-null state per the getActivityState contract.
+  if (orchestrator.activity === null || orchestrator.activity === "exited") return null;
   if (orchestrator.activity === "active") return null; // busy — don't interrupt
   const workers = workersForOrchestrator(orchestrator, all);
   if (workers.length === 0) return null;

@@ -96,6 +96,9 @@ describe("evaluateOrchestrator", () => {
   it("stays silent when orchestrator has exited", () => {
     expect(evaluateOrchestrator(orch({ activity: "exited" }), [staleWorker], NOW, undefined)).toBeNull();
   });
+  it("stays silent when orchestrator activity is null (dead/no live agent)", () => {
+    expect(evaluateOrchestrator(orch({ activity: null }), [staleWorker], NOW, undefined)).toBeNull();
+  });
   it("stays silent when no workers", () => {
     expect(evaluateOrchestrator(orch(), [orch()], NOW, undefined)).toBeNull();
   });
