@@ -202,6 +202,7 @@ export {
   isRetryableHttpStatus,
   normalizeRetryConfig,
   readLastJsonlEntry,
+  readLastLines,
   resolveProjectIdForSessionId,
 } from "./utils.js";
 export {
