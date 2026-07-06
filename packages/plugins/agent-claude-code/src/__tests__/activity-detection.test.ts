@@ -11,7 +11,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { toClaudeProjectPath, create } from "../index.js";
-import { resetWarnedReaddirPaths } from "../activity-detection.js";
+import { resetWarnedReaddirPaths, readLastRealActivityTimestamp } from "../activity-detection.js";
 import {
   createActivitySignal,
   type ActivityState,
@@ -655,5 +655,35 @@ describe("Claude Code Activity Detection", () => {
         expect((await agent.getActivityState(makeSession()))?.state).toBe("idle");
       });
     });
+  });
+});
+
+// =============================================================================
+// readLastRealActivityTimestamp
+// =============================================================================
+
+function jsonl(...entries: object[]): string {
+  const dir = mkdtempSync(join(tmpdir(), "ao-claude-"));
+  const p = join(dir, "s.jsonl");
+  writeFileSync(p, entries.map((e) => JSON.stringify(e)).join("\n") + "\n", "utf-8");
+  return p;
+}
+
+describe("readLastRealActivityTimestamp", () => {
+  it("returns the embedded timestamp of the last NON-noise entry", async () => {
+    const real = "2026-07-05T22:43:59.696Z";
+    const p = jsonl(
+      { type: "assistant", timestamp: real },
+      { type: "pr-link", timestamp: "2026-07-06T06:57:00.000Z" }, // noise, newer
+      { type: "permission-mode" }, // noise, no ts
+    );
+    expect((await readLastRealActivityTimestamp(p))?.toISOString()).toBe(real);
+  });
+  it("returns null when only noise / no parseable timestamp exists", async () => {
+    const p = jsonl({ type: "pr-link" }, { type: "permission-mode" });
+    expect(await readLastRealActivityTimestamp(p)).toBeNull();
+  });
+  it("returns null for a missing file", async () => {
+    expect(await readLastRealActivityTimestamp("/no/such/file.jsonl")).toBeNull();
   });
 });
