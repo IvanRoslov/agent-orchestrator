@@ -111,7 +111,7 @@ export const getDashboardPageData = cache(async function getDashboardPageData(pr
   pageData.orchestrators = listDashboardOrchestrators(visibleSessions, config.projects);
 
   const coreSessions = filterWorkerSessions(allSessions, projectFilter, config.projects);
-  pageData.sessions = coreSessions.map(sessionToDashboard);
+  pageData.sessions = coreSessions.map((s) => sessionToDashboard(s));
 
   // Fast enrichment: issue labels (sync) + agent summaries (local disk I/O).
   // Keep a hard cap here so a slow local agent plugin can't stall SSR indefinitely.

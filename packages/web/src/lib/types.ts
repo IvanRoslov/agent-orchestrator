@@ -117,6 +117,9 @@ export interface DashboardSession {
   summaryIsFallback: boolean;
   createdAt: string;
   lastActivityAt: string;
+  /** Agent's real last-activity time (from native JSONL), when available.
+   *  Falls back to lastActivityAt. Set only for non-terminal sessions. */
+  realLastActivityAt?: string;
   pr: DashboardPR | null;
   /** All PRs opened by this session across multiple repos.
    *  Mirrors core Session.prs — array of DashboardPR objects.

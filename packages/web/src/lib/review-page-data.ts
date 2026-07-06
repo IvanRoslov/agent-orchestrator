@@ -94,7 +94,7 @@ export async function getReviewPageData(project?: string): Promise<ReviewPageDat
     );
     const workerSessions = [...workerSessionsById.values()];
 
-    pageData.sidebarSessions = visibleSessions.map(sessionToDashboard);
+    pageData.sidebarSessions = visibleSessions.map((s) => sessionToDashboard(s));
     const visibleSessionsById = new Map(visibleSessions.map((session) => [session.id, session]));
     pageData.orchestrators = listDashboardOrchestrators(visibleSessions, config.projects).map(
       (orchestrator) => {

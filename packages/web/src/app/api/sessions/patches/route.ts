@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const visibleSessions = filterWorkerSessions(coreSessions, projectFilter, config.projects);
 
     // Convert to dashboard format
-    const dashboardSessions = visibleSessions.map(sessionToDashboard);
+    const dashboardSessions = visibleSessions.map((s) => sessionToDashboard(s));
 
     const attentionZones = config.dashboard?.attentionZones ?? "simple";
 
