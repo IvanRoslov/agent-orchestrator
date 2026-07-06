@@ -1,5 +1,4 @@
-import { isOrchestratorSession, isTerminalSession } from "@aoagents/ao-core";
-import type { Agent } from "@aoagents/ao-core";
+import { isOrchestratorSession, isTerminalSession, type Agent } from "@aoagents/ao-core";
 import { getServices } from "@/lib/services";
 import {
   sessionToDashboard,
