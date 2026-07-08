@@ -22,4 +22,11 @@ describe("GET /api/resources", () => {
     expect(body).toHaveProperty("platformSupported");
     expect(listMock).toHaveBeenCalledTimes(1);
   });
+
+  it("returns 500 with an error body when the snapshot fails", async () => {
+    listMock.mockRejectedValue(new Error("boom"));
+    const res = await GET(new Request("http://localhost/api/resources") as never);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "boom" });
+  });
 });
