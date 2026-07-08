@@ -62,7 +62,8 @@ export async function listTmuxSessions(): Promise<TmuxSession[] | null> {
     ]);
     return buildTmuxSessions(panes.stdout, sess.stdout);
   } catch {
-    // tmux exits non-zero when no server is running / no sessions.
+    // tmux exits non-zero when no server/sessions; ENOENT/permission errors
+    // are also folded into "no sessions" here so the page degrades quietly.
     return [];
   }
 }

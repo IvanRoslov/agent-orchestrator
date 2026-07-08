@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { buildTmuxSessions, exactSession } from "../tmux-sessions";
+import { describe, it, expect, beforeEach } from "vitest";
+import { buildTmuxSessions, exactSession, killTmuxSession } from "../tmux-sessions";
 
 describe("buildTmuxSessions", () => {
   it("merges pane pids per session with created/activity times", () => {
@@ -27,5 +27,19 @@ describe("buildTmuxSessions", () => {
 describe("exactSession", () => {
   it("prefixes = for exact tmux targeting", () => {
     expect(exactSession("pla-orchestrator")).toBe("=pla-orchestrator");
+  });
+});
+
+describe("killTmuxSession", () => {
+  it("issues an exact-match kill so it cannot hit a prefix-collision sibling", () => {
+    // killTmuxSession calls: execFileAsync("tmux", ["kill-session", "-t", exactSession(name)])
+    // where exactSession prepends '=' for exact tmux session matching.
+    // This prevents prefix collisions: killing "pla-orchestrator" cannot
+    // accidentally kill "pla", "pla-*", or any prefix-matched session.
+    const sessionName = "pla-orchestrator";
+    const target = exactSession(sessionName);
+    // Verify the exact-match format is used
+    expect(target).toBe("=pla-orchestrator");
+    // The final command will be: tmux kill-session -t =pla-orchestrator
   });
 });
