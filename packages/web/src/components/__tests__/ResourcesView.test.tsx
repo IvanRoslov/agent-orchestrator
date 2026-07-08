@@ -84,6 +84,24 @@ describe("ResourcesView", () => {
     );
   });
 
+  it("keeps the modal open and shows an error when the kill fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => snapshot } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ error: "boom" }) } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ResourcesView />);
+    const killButton = (await screen.findAllByRole("button", { name: /kill/i }))[0];
+    fireEvent.click(killButton);
+    const confirm = await screen.findByRole("button", { name: /confirm/i });
+    fireEvent.click(confirm);
+
+    expect(await screen.findByText(/kill failed/i)).toBeInTheDocument();
+    // refresh() must NOT run on failure → exactly 2 fetches (initial snapshot + failed kill)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
   it("shows a Windows note when resource stats are unavailable", async () => {
     vi.stubGlobal(
       "fetch",

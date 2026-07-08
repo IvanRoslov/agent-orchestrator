@@ -12,18 +12,26 @@ export function ResourcesView() {
   const { data, loading, error, refresh } = useResourceSnapshot();
   const [pending, setPending] = useState<ResourceRow | null>(null);
   const [killing, setKilling] = useState(false);
+  const [killError, setKillError] = useState<string | null>(null);
 
   async function confirmKill(): Promise<void> {
     if (!pending) return;
     setKilling(true);
+    setKillError(null);
     try {
-      await fetch("/api/resources/kill", {
+      const res = await fetch("/api/resources/kill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tmuxSession: pending.tmuxSession }),
       });
+      if (!res.ok) {
+        setKillError(`Kill failed (HTTP ${res.status})`);
+        return;
+      }
       setPending(null);
       await refresh();
+    } catch {
+      setKillError("Kill request failed");
     } finally {
       setKilling(false);
     }
@@ -114,10 +122,16 @@ export function ResourcesView() {
                 ? " This orphan will be killed directly via tmux."
                 : " This tracked session will be killed via its lifecycle."}
             </p>
+            {killError && (
+              <p className="text-sm text-[var(--color-status-error)]">{killError}</p>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setPending(null)}
+                onClick={() => {
+                  setPending(null);
+                  setKillError(null);
+                }}
                 className="rounded border border-[var(--color-border-default)] px-3 py-1 text-sm text-[var(--color-text-primary)]"
               >
                 Cancel
