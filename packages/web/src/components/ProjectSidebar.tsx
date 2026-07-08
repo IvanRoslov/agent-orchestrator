@@ -302,6 +302,9 @@ function ProjectSidebarEmpty({ collapsed = false }: { collapsed?: boolean }) {
           </svg>
         </button>
       </div>
+      <Link href="/resources" className="project-sidebar__nav-label">
+        <span>Resources</span>
+      </Link>
       <div className="project-sidebar__empty flex-1 text-[var(--color-text-tertiary)]">
         No projects yet. Click + to add one.
       </div>
@@ -795,6 +798,9 @@ function ProjectSidebarInner({
           </svg>
         </button>
       </div>
+      <Link href="/resources" className="project-sidebar__nav-label">
+        <span>Resources</span>
+      </Link>
 
       {/* Stale-data banner: keep cached sessions visible on fetch failure but
             surface the error so users know the list may be out of date. */}
