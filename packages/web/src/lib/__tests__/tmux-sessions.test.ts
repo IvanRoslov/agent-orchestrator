@@ -1,4 +1,43 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock the child_process boundary so killTmuxSession's actual tmux invocation
+// can be inspected. Hoisted so the mock is in place before tmux-sessions.ts
+// binds execFileAsync = promisify(execFile) at import time.
+const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }));
+vi.mock("node:child_process", () => {
+  // tmux-sessions.ts does `promisify(execFile)` at import, so the mock's
+  // execFile must carry promisify.custom (the globally-registered symbol) —
+  // otherwise promisify falls through and actually shells out to tmux.
+  // Also expose `default` + no-op siblings so shared importers of this module
+  // (e.g. @aoagents/ao-core's platform.ts) don't break on missing exports.
+  const custom = Symbol.for("nodejs.util.promisify.custom");
+  const execFile = Object.assign(
+    (
+      _cmd: string,
+      _args: string[],
+      cb: (e: Error | null, r: { stdout: string; stderr: string }) => void,
+    ) => {
+      execFileMock(_cmd, _args);
+      cb(null, { stdout: "", stderr: "" });
+    },
+    {
+      [custom]: (cmd: string, args: string[]) => {
+        execFileMock(cmd, args);
+        return Promise.resolve({ stdout: "", stderr: "" });
+      },
+    },
+  );
+  const noop = () => undefined;
+  return {
+    execFile,
+    spawn: noop,
+    exec: noop,
+    execSync: noop,
+    execFileSync: noop,
+    default: { execFile, spawn: noop, exec: noop, execSync: noop, execFileSync: noop },
+  };
+});
+
 import { buildTmuxSessions, exactSession, killTmuxSession } from "../tmux-sessions";
 
 describe("buildTmuxSessions", () => {
@@ -31,15 +70,15 @@ describe("exactSession", () => {
 });
 
 describe("killTmuxSession", () => {
-  it("issues an exact-match kill so it cannot hit a prefix-collision sibling", () => {
-    // killTmuxSession calls: execFileAsync("tmux", ["kill-session", "-t", exactSession(name)])
-    // where exactSession prepends '=' for exact tmux session matching.
-    // This prevents prefix collisions: killing "pla-orchestrator" cannot
-    // accidentally kill "pla", "pla-*", or any prefix-matched session.
-    const sessionName = "pla-orchestrator";
-    const target = exactSession(sessionName);
-    // Verify the exact-match format is used
-    expect(target).toBe("=pla-orchestrator");
-    // The final command will be: tmux kill-session -t =pla-orchestrator
+  beforeEach(() => execFileMock.mockClear());
+
+  it("issues an exact-match kill so it cannot hit a prefix-collision sibling", async () => {
+    await killTmuxSession("pla-orchestrator");
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    const [cmd, args] = execFileMock.mock.calls[0];
+    expect(cmd).toBe("tmux");
+    // The "=" prefix is the whole point: killing "pla-orchestrator" must not
+    // hit "pla-orchestrator-83" or any other prefix-matched sibling.
+    expect(args).toEqual(["kill-session", "-t", "=pla-orchestrator"]);
   });
 });
