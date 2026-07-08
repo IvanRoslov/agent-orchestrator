@@ -35,11 +35,16 @@ export function parsePs(psText: string): Map<number, ProcInfo> {
   return map;
 }
 
-/** Collect process stats via `ps`. Returns null on Windows (no `ps`). */
+/** Collect process stats via ps. Returns null on Windows or if ps is unavailable. */
 export async function collectProcessStats(): Promise<Map<number, ProcInfo> | null> {
   if (isWindows()) return null;
-  const { stdout } = await execFileAsync("ps", ["-Ao", "pid=,ppid=,%cpu=,rss=,comm="], {
-    maxBuffer: 8 * 1024 * 1024,
-  });
-  return parsePs(stdout);
+  try {
+    const { stdout } = await execFileAsync("ps", ["-Ao", "pid=,ppid=,%cpu=,rss=,comm="], {
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    return parsePs(stdout);
+  } catch {
+    // ps unavailable/restricted (sandbox, permissions) → degrade like Windows.
+    return null;
+  }
 }
