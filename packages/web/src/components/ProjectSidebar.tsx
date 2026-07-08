@@ -302,7 +302,7 @@ function ProjectSidebarEmpty({ collapsed = false }: { collapsed?: boolean }) {
           </svg>
         </button>
       </div>
-      <Link href="/resources" className="project-sidebar__nav-label">
+      <Link href="/resources" className="project-sidebar__nav-link">
         <span>Resources</span>
       </Link>
       <div className="project-sidebar__empty flex-1 text-[var(--color-text-tertiary)]">
@@ -798,7 +798,7 @@ function ProjectSidebarInner({
           </svg>
         </button>
       </div>
-      <Link href="/resources" className="project-sidebar__nav-label">
+      <Link href="/resources" className="project-sidebar__nav-link">
         <span>Resources</span>
       </Link>
 
