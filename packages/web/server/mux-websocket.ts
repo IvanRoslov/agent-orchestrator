@@ -82,8 +82,11 @@ interface SessionPatch {
 export class SessionBroadcaster {
   private subscribers = new Set<(sessions: SessionPatch[]) => void>();
   private errorSubscribers = new Set<(error: string) => void>();
-  private intervalId: ReturnType<typeof setInterval> | null = null;
-  private polling = false;
+  private timerId: ReturnType<typeof setTimeout> | null = null;
+  private active = false;
+  private consecutiveFailures = 0;
+  private static readonly BASE_INTERVAL_MS = 3000;
+  private static readonly MAX_INTERVAL_MS = 30000;
   // Tracks the last fetch outcome so we only emit ui.session_broadcast_failed on
   // the healthy → failing transition (not every 3s during an outage).
   private lastFetchOk = true;
@@ -124,18 +127,8 @@ export class SessionBroadcaster {
 
     // Start polling if this is the first subscriber
     if (wasEmpty) {
-      this.intervalId = setInterval(() => {
-        if (this.polling) return;
-        this.polling = true;
-        void this.fetchSnapshot()
-          .then((result) => {
-            if (result.sessions && this.intervalId !== null) this.broadcast(result.sessions);
-            else if (result.error && this.intervalId !== null) this.broadcastError(result.error);
-          })
-          .finally(() => {
-            this.polling = false;
-          });
-      }, 3000);
+      this.active = true;
+      this.scheduleNext();
     }
 
     return () => {
@@ -167,6 +160,32 @@ export class SessionBroadcaster {
     }
   }
 
+  private nextDelayMs(): number {
+    if (this.consecutiveFailures === 0) return SessionBroadcaster.BASE_INTERVAL_MS;
+    return Math.min(
+      SessionBroadcaster.BASE_INTERVAL_MS * 2 ** this.consecutiveFailures,
+      SessionBroadcaster.MAX_INTERVAL_MS,
+    );
+  }
+
+  private scheduleNext(): void {
+    if (!this.active) return;
+    this.timerId = setTimeout(() => void this.poll(), this.nextDelayMs());
+  }
+
+  private async poll(): Promise<void> {
+    const result = await this.fetchSnapshot();
+    if (!this.active) return;
+    if (result.sessions) {
+      this.consecutiveFailures = 0;
+      this.broadcast(result.sessions);
+    } else if (result.error) {
+      this.consecutiveFailures++;
+      this.broadcastError(result.error);
+    }
+    this.scheduleNext();
+  }
+
   /** One-shot HTTP fetch of the current session list. */
   private async fetchSnapshot(): Promise<{
     sessions: SessionPatch[] | null;
@@ -181,7 +200,7 @@ export class SessionBroadcaster {
       clearTimeout(timeoutId);
       if (!res.ok) {
         const msg = `Session fetch failed: HTTP ${res.status}`;
-        console.warn(`[SessionBroadcaster] ${msg}`);
+        if (this.lastFetchOk) console.warn(`[SessionBroadcaster] ${msg}`);
         this.recordFetchFailure(msg, { httpStatus: res.status });
         return { sessions: null, error: msg };
       }
@@ -191,7 +210,7 @@ export class SessionBroadcaster {
     } catch (err) {
       clearTimeout(timeoutId);
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn("[SessionBroadcaster] fetchSnapshot error:", msg);
+      if (this.lastFetchOk) console.warn("[SessionBroadcaster] fetchSnapshot error:", msg);
       this.recordFetchFailure(msg);
       return { sessions: null, error: msg };
     }
@@ -219,10 +238,12 @@ export class SessionBroadcaster {
   }
 
   private disconnect(): void {
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    this.active = false;
+    if (this.timerId !== null) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
     }
+    this.consecutiveFailures = 0;
   }
 }
 

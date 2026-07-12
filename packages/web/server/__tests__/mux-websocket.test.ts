@@ -400,6 +400,57 @@ describe("SessionBroadcaster", () => {
       expect(call.data["httpStatus"]).toBe(503);
     });
   });
+
+  describe("poll backoff", () => {
+    it("backs off the poll interval on consecutive failures and resets on success", async () => {
+      mockFetch.mockRejectedValue(new Error("down"));
+      const unsub = broadcaster.subscribe(
+        () => {},
+        () => {},
+      );
+      // immediate one-off snapshot fetch fired on subscribe
+      await vi.advanceTimersByTimeAsync(0);
+      const afterSubscribe = mockFetch.mock.calls.length;
+
+      // base 3s → first poll
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(mockFetch.mock.calls.length).toBe(afterSubscribe + 1);
+      // failed once → next poll backs off to 6s (nothing at +3s)
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(mockFetch.mock.calls.length).toBe(afterSubscribe + 1);
+      await vi.advanceTimersByTimeAsync(3000); // now at +6s from the failure
+      expect(mockFetch.mock.calls.length).toBe(afterSubscribe + 2);
+
+      // recover → interval resets to base 3s
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: [] }) });
+      await vi.advanceTimersByTimeAsync(12000); // let the backed-off poll fire and succeed
+      const afterRecover = mockFetch.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(mockFetch.mock.calls.length).toBe(afterRecover + 1); // back to 3s cadence
+
+      unsub();
+    });
+
+    it("throttles the raw warn to once per failing streak", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      mockFetch.mockRejectedValue(new Error("down"));
+      const unsub = broadcaster.subscribe(
+        () => {},
+        () => {},
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(6000);
+      await vi.advanceTimersByTimeAsync(12000);
+      const sessionWarns = warn.mock.calls.filter((c) =>
+        String(c[0]).includes("[SessionBroadcaster]"),
+      );
+      expect(sessionWarns.length).toBe(1); // one per streak, not per poll
+      unsub();
+      warn.mockRestore();
+    });
+  });
 });
 
 // ── Connection-level activity events ──────────────────────────────────
