@@ -246,6 +246,7 @@ import { GET as observabilityGET } from "@/app/api/observability/route";
 import { GET as runtimeTerminalGET } from "@/app/api/runtime/terminal/route";
 import { GET as verifyGET, POST as verifyPOST } from "@/app/api/verify/route";
 import { GET as patchesGET } from "@/app/api/sessions/patches/route";
+import { resetSnapshotCache } from "@/lib/session-snapshot-cache";
 
 function makeRequest(url: string, init?: RequestInit): NextRequest {
   return new NextRequest(
@@ -256,6 +257,11 @@ function makeRequest(url: string, init?: RequestInit): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // GET /api/sessions now shares results across same-scope requests via the
+  // snapshot cache (packages/web/src/lib/session-snapshot-cache.ts) — reset
+  // it so each test's mockResolvedValueOnce/mockImplementationOnce overrides
+  // aren't skipped (cache hit) or leaked into a later, unrelated test.
+  resetSnapshotCache();
   // Re-set default return values
   (mockSessionManager.list as ReturnType<typeof vi.fn>).mockResolvedValue(testSessions);
   (mockSessionManager.listCached as ReturnType<typeof vi.fn>).mockResolvedValue(testSessions);

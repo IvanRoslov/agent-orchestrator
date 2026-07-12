@@ -10,7 +10,8 @@ import {
 import { getCorrelationId, jsonWithCorrelation, recordApiObservation } from "@/lib/observability";
 import { filterProjectSessions } from "@/lib/project-utils";
 import { settlesWithin } from "@/lib/async-utils";
-import { type DashboardOrchestratorLink } from "@/lib/types";
+import { getEnrichedSnapshot } from "@/lib/session-snapshot-cache";
+import { type DashboardOrchestratorLink, type DashboardSession } from "@/lib/types";
 
 const METADATA_ENRICH_TIMEOUT_MS = 3_000;
 
@@ -82,104 +83,99 @@ export async function GET(request: Request) {
     const activeOnly = searchParams.get("active") === "true";
     const orchestratorOnly = searchParams.get("orchestratorOnly") === "true";
     const fresh = searchParams.get("fresh") === "true";
+    const scopeKey = `${projectFilter ?? "all"}|active=${activeOnly}|orch=${orchestratorOnly}|fresh=${fresh}`;
 
-    const { config, registry, sessionManager } = await getServices();
-    const requestedProjectId =
-      projectFilter && projectFilter !== "all" && config.projects[projectFilter]
-        ? projectFilter
-        : undefined;
-    const coreSessions = fresh
-      ? await sessionManager.list(requestedProjectId)
-      : await sessionManager.listCached(requestedProjectId);
-    const visibleSessions = filterProjectSessions(coreSessions, projectFilter, config.projects);
-    const orchestrators = requestedProjectId
-      ? listPreferredProjectOrchestrators(visibleSessions, config.projects)
-      : listDashboardOrchestrators(visibleSessions, config.projects);
-    const orchestratorId = requestedProjectId
-      ? selectPreferredOrchestratorId(visibleSessions, config.projects)
-      : orchestrators.length === 1
-        ? (orchestrators[0]?.id ?? null)
-        : null;
+    const services = await getServices();
+    const { config, registry, sessionManager } = services;
 
-    if (orchestratorOnly) {
-      recordApiObservation({
-        config,
-        method: "GET",
-        path: "/api/sessions",
-        correlationId,
-        startedAt,
-        outcome: "success",
-        statusCode: 200,
-        data: { orchestratorOnly: true, orchestratorCount: orchestrators.length, fresh },
+    const payload = await getEnrichedSnapshot(scopeKey, async () => {
+      const requestedProjectId =
+        projectFilter && projectFilter !== "all" && config.projects[projectFilter]
+          ? projectFilter
+          : undefined;
+      const coreSessions = fresh
+        ? await sessionManager.list(requestedProjectId)
+        : await sessionManager.listCached(requestedProjectId);
+      const visibleSessions = filterProjectSessions(coreSessions, projectFilter, config.projects);
+      const orchestrators = requestedProjectId
+        ? listPreferredProjectOrchestrators(visibleSessions, config.projects)
+        : listDashboardOrchestrators(visibleSessions, config.projects);
+      const orchestratorId = requestedProjectId
+        ? selectPreferredOrchestratorId(visibleSessions, config.projects)
+        : orchestrators.length === 1
+          ? (orchestrators[0]?.id ?? null)
+          : null;
+
+      if (orchestratorOnly) {
+        return { orchestratorId, orchestrators, sessions: [] as DashboardSession[] };
+      }
+
+      const allSessionPrefixes = Object.entries(config.projects).map(
+        ([projectId, p]) => p.sessionPrefix ?? projectId,
+      );
+      // Keep workers AND feature orchestrators (metadata.feature) in `sessions`;
+      // strip regular orchestrators (the project's main orchestrator, surfaced
+      // separately via the `orchestrators` link). Feature orchestrators ride this
+      // list so the dashboard can show them in the sidebar "Features" group and
+      // keep them out of the Kanban (detected by their stable metadata.feature).
+      let workerSessions = visibleSessions.filter((session) => {
+        const isOrch = isOrchestratorSession(
+          session,
+          config.projects[session.projectId]?.sessionPrefix ?? session.projectId,
+          allSessionPrefixes,
+        );
+        return !isOrch || Boolean(session.metadata?.["feature"]);
       });
 
-      return jsonWithCorrelation(
-        {
-          orchestratorId,
-          orchestrators,
-          sessions: [],
-        },
-        { status: 200 },
-        correlationId,
+      // Convert to dashboard format
+      const realActivity = new Map<string, string>();
+      await Promise.all(
+        workerSessions
+          .filter((s) => !isTerminalSession(s))
+          .map(async (s) => {
+            try {
+              const agent = registry.get<Agent>("agent", s.metadata["agent"] ?? "");
+              const detected = await agent?.getActivityState(s);
+              if (detected?.timestamp) realActivity.set(s.id, detected.timestamp.toISOString());
+            } catch {
+              /* best-effort — fall back to lastActivityAt */
+            }
+          }),
       );
-    }
-
-    const allSessionPrefixes = Object.entries(config.projects).map(
-      ([projectId, p]) => p.sessionPrefix ?? projectId,
-    );
-    // Keep workers AND feature orchestrators (metadata.feature) in `sessions`;
-    // strip regular orchestrators (the project's main orchestrator, surfaced
-    // separately via the `orchestrators` link). Feature orchestrators ride this
-    // list so the dashboard can show them in the sidebar "Features" group and
-    // keep them out of the Kanban (detected by their stable metadata.feature).
-    let workerSessions = visibleSessions.filter((session) => {
-      const isOrch = isOrchestratorSession(
-        session,
-        config.projects[session.projectId]?.sessionPrefix ?? session.projectId,
-        allSessionPrefixes,
+      let dashboardSessions = workerSessions.map((s) =>
+        sessionToDashboard(s, realActivity.get(s.id)),
       );
-      return !isOrch || Boolean(session.metadata?.["feature"]);
-    });
 
-    // Convert to dashboard format
-    const realActivity = new Map<string, string>();
-    await Promise.all(
-      workerSessions
-        .filter((s) => !isTerminalSession(s))
-        .map(async (s) => {
-          try {
-            const agent = registry.get<Agent>("agent", s.metadata["agent"] ?? "");
-            const detected = await agent?.getActivityState(s);
-            if (detected?.timestamp) realActivity.set(s.id, detected.timestamp.toISOString());
-          } catch {
-            /* best-effort — fall back to lastActivityAt */
-          }
-        }),
-    );
-    let dashboardSessions = workerSessions.map((s) => sessionToDashboard(s, realActivity.get(s.id)));
-
-    if (activeOnly) {
-      const activeIndices = workerSessions
-        .map((session, index) => (!isTerminalSession(session) ? index : -1))
-        .filter((index) => index !== -1);
-      workerSessions = activeIndices.map((index) => workerSessions[index]);
-      dashboardSessions = activeIndices.map((index) => dashboardSessions[index]);
-    }
-
-    const metadataSettled = await settlesWithin(
-      enrichSessionsMetadata(workerSessions, dashboardSessions, config, registry),
-      METADATA_ENRICH_TIMEOUT_MS,
-    );
-
-    if (metadataSettled) {
-      // PR enrichment: read from session metadata (written by CLI lifecycle).
-      // No GitHub API calls — synchronous metadata read.
-      for (let i = 0; i < workerSessions.length; i++) {
-        const ws = workerSessions[i];
-        if (!ws?.pr && (!ws?.prs || ws.prs.length === 0)) continue;
-        enrichSessionPR(dashboardSessions[i]);
+      if (activeOnly) {
+        const activeIndices = workerSessions
+          .map((session, index) => (!isTerminalSession(session) ? index : -1))
+          .filter((index) => index !== -1);
+        workerSessions = activeIndices.map((index) => workerSessions[index]);
+        dashboardSessions = activeIndices.map((index) => dashboardSessions[index]);
       }
-    }
+
+      const metadataSettled = await settlesWithin(
+        enrichSessionsMetadata(workerSessions, dashboardSessions, config, registry),
+        METADATA_ENRICH_TIMEOUT_MS,
+      );
+
+      if (metadataSettled) {
+        // PR enrichment: read from session metadata (written by CLI lifecycle).
+        // No GitHub API calls — synchronous metadata read.
+        for (let i = 0; i < workerSessions.length; i++) {
+          const ws = workerSessions[i];
+          if (!ws?.pr && (!ws?.prs || ws.prs.length === 0)) continue;
+          enrichSessionPR(dashboardSessions[i]);
+        }
+      }
+
+      return {
+        sessions: dashboardSessions,
+        stats: computeStats(dashboardSessions),
+        orchestratorId,
+        orchestrators,
+      };
+    });
 
     recordApiObservation({
       config,
@@ -189,19 +185,10 @@ export async function GET(request: Request) {
       startedAt,
       outcome: "success",
       statusCode: 200,
-      data: { sessionCount: dashboardSessions.length, activeOnly, fresh },
+      data: { sessionCount: payload.sessions.length, activeOnly, orchestratorOnly, fresh },
     });
 
-    return jsonWithCorrelation(
-      {
-        sessions: dashboardSessions,
-        stats: computeStats(dashboardSessions),
-        orchestratorId,
-        orchestrators,
-      },
-      { status: 200 },
-      correlationId,
-    );
+    return jsonWithCorrelation(payload, { status: 200 }, correlationId);
   } catch (err) {
     const { config } = await getServices().catch(() => ({ config: undefined }));
     if (config) {
