@@ -85,6 +85,11 @@ export class SessionBroadcaster {
   private timerId: ReturnType<typeof setTimeout> | null = null;
   private active = false;
   private consecutiveFailures = 0;
+  // Incremented on every disconnect(). A poll() continuation captures the
+  // generation it was scheduled under; if disconnect+resubscribe races its
+  // in-flight fetch, the continuation's generation no longer matches and it
+  // becomes a no-op instead of overwriting the fresh timer armed by resubscribe.
+  private generation = 0;
   private static readonly BASE_INTERVAL_MS = 3000;
   private static readonly MAX_INTERVAL_MS = 30000;
   // Tracks the last fetch outcome so we only emit ui.session_broadcast_failed on
@@ -170,12 +175,14 @@ export class SessionBroadcaster {
 
   private scheduleNext(): void {
     if (!this.active) return;
-    this.timerId = setTimeout(() => void this.poll(), this.nextDelayMs());
+    if (this.timerId !== null) clearTimeout(this.timerId);
+    const gen = this.generation;
+    this.timerId = setTimeout(() => void this.poll(gen), this.nextDelayMs());
   }
 
-  private async poll(): Promise<void> {
+  private async poll(gen: number): Promise<void> {
     const result = await this.fetchSnapshot();
-    if (!this.active) return;
+    if (!this.active || gen !== this.generation) return; // superseded by a disconnect
     if (result.sessions) {
       this.consecutiveFailures = 0;
       this.broadcast(result.sessions);
@@ -239,6 +246,7 @@ export class SessionBroadcaster {
 
   private disconnect(): void {
     this.active = false;
+    this.generation++; // supersede any in-flight poll continuation
     if (this.timerId !== null) {
       clearTimeout(this.timerId);
       this.timerId = null;

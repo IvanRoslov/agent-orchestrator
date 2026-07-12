@@ -451,6 +451,37 @@ describe("SessionBroadcaster", () => {
       warn.mockRestore();
     });
   });
+
+  it("does not leak a timer when disconnect+resubscribe races an in-flight poll fetch", async () => {
+    let resolveFetch: (v: unknown) => void = () => {};
+    const hanging = new Promise((r) => {
+      resolveFetch = r;
+    });
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ sessions: [] }) }) // on-subscribe #1
+      .mockReturnValueOnce(hanging) // poll #1 — hangs in flight
+      .mockResolvedValue({ ok: true, json: async () => ({ sessions: [] }) }); // on-subscribe #2 + rest
+
+    const unsub1 = broadcaster.subscribe(
+      () => {},
+      () => {},
+    );
+    await vi.advanceTimersByTimeAsync(0); // on-subscribe #1 settles
+    await vi.advanceTimersByTimeAsync(3000); // poll #1 fires, its fetch hangs
+    unsub1(); // disconnect while poll #1 is in flight
+    const unsub2 = broadcaster.subscribe(
+      () => {},
+      () => {},
+    ); // resubscribe → arms a fresh timer
+    await vi.advanceTimersByTimeAsync(0); // on-subscribe #2 settles
+    resolveFetch({ ok: true, json: async () => ({ sessions: [] }) }); // poll #1 resumes (must be a no-op via gen check)
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Exactly one live timer (the resubscribe's). Buggy code leaks a second.
+    expect(vi.getTimerCount()).toBe(1);
+
+    unsub2();
+  });
 });
 
 // ── Connection-level activity events ──────────────────────────────────
