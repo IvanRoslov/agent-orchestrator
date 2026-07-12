@@ -185,7 +185,13 @@ export async function GET(request: Request) {
       startedAt,
       outcome: "success",
       statusCode: 200,
-      data: { sessionCount: payload.sessions.length, activeOnly, orchestratorOnly, fresh },
+      data: {
+        sessionCount: payload.sessions.length,
+        orchestratorCount: payload.orchestrators.length,
+        activeOnly,
+        orchestratorOnly,
+        fresh,
+      },
     });
 
     return jsonWithCorrelation(payload, { status: 200 }, correlationId);
